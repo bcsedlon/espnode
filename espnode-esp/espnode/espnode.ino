@@ -175,8 +175,8 @@ Timezone CE(CEST, CET);
 //const char* mqtt_server = "broker.hivemq.com";//"iot.eclipse.org";
 //const char* mqtt_server = "iot.eclipse.org";
 
-#define MQTT_CLIENTID   "GROWMAT-"
-#define MQTT_ROOT_TOPIC	"GROWMAT/"
+#define MQTT_CLIENTID   "ESPNODE-"
+//#define MQTT_ROOT_TOPIC	"ESPNODE/"
 //#define A_TOPIC 	"/A"
 //#define B_TOPIC 	"/B"
 //#define C_TOPIC 	"/C"
@@ -308,7 +308,7 @@ void drawFrame1(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int1
 	}
 	display->setFont(ArialMT_Plain_16);
 	display->setTextAlignment(TEXT_ALIGN_LEFT);
-	display->drawString(0 + x, 32 + y, "GROWMAT");
+	display->drawString(0 + x, 32 + y, "ESPNODE");
 }
 
 void drawFrameA1(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
@@ -491,6 +491,60 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 	}
 	Serial.println();
 
+	if(strstr(topic, "/parsave")) {
+		saveInstruments();
+		return;
+	}
+	if(strstr(topic, "/parload")) {
+		String mqttTopicVal = String(mqttRootTopicVal + "/mode");
+		snprintf(msg, 20, "%i", mode);
+		mqttClient.publish(mqttTopicVal.c_str(), msg);
+		Serial.print(mqttTopicVal);
+		Serial.print(": ");
+		Serial.println(msg);
+
+		for(int i = 0; i < DEVICES_NUM; i++) {
+			for(int p = 0;  p < 4; p++) {
+				String mqttTopic = String('/' + String(i) + "/par" + String(p + 1));
+				String mqttTopicVal = String(mqttRootTopicVal + mqttTopic);
+				if(p == 0)
+					snprintf(msg, 20, "%i", devices[i].par1);
+				if(p == 1)
+					snprintf(msg, 20, "%i", devices[i].par2);
+				if(p == 2)
+					snprintf(msg, 20, "%i", devices[i].par3);
+				if(p == 3)
+					snprintf(msg, 20, "%i", devices[i].par4);
+				mqttClient.publish(mqttTopicVal.c_str(), msg);
+				Serial.print(mqttTopicVal);
+				Serial.print(": ");
+				Serial.println(msg);
+			}
+		}
+		return;
+	}
+
+	if(strstr((topic + strlen(topic) - 5), "/par")) {
+		int p = topic[strlen(topic) - 1] - 48 - 1;
+		int i = topic[strlen(topic) - 6] - 48;
+		//Serial.println(i);
+		//Serial.println(p);
+
+		if(i > -1 && i < DEVICES_NUM) {
+			strncpy(msg, (const char*)payload, length);
+			msg[length] = 0;
+			if(p == 0)
+				devices[i].par1 = atoi(msg);
+			if(p == 1)
+				devices[i].par2 = atoi(msg);
+			if(p == 2)
+				devices[i].par3 = atoi(msg);
+			if(p == 3)
+				devices[i].par4 = atoi(msg);
+		}
+		return;
+	}
+
 	int i = topic[strlen(topic) - 1] - 48;
 	/*
 	int i = -1;
@@ -545,17 +599,17 @@ void mqttConnect() {
 }
 #endif
 
-const char* host = "GROWMAT-ESP";
+const char* host = "ESPNODE-ESP";
 const char* update_path = "/firmware";
 
 char* htmlHeader =
-		"<html><head><title>GROWMAT</title><meta name=\"viewport\" content=\"width=device-width\"><style type=\"text/css\">body{font-family:monospace;} input{padding:5px;font-size:1em;font-family:monospace;} button{height:100px;width:100px;font-family:monospace;border-radius:5px;}</style></head><body><h1><a href=/>GROWMAT</a></h1>";
+		"<html><head><title>ESPNODE</title><meta name=\"viewport\" content=\"width=device-width\"><style type=\"text/css\">body{font-family:monospace;} input{padding:5px;font-size:1em;font-family:monospace;} button{height:100px;width:100px;font-family:monospace;border-radius:5px;}</style></head><body><h1><a href=/>ESPNODE</a></h1>";
 char* htmlFooter =
 		"<hr><a href=./save>SAVE SETTINGS!</a><hr><a href=/settings>SYSTEM SETTINGS</a><hr>(c) GROWMAT EASY</body></html>";
 //const char HTTP_STYLE[] PROGMEM  = "<style>.c{text-align: center;} div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;font-family:verdana;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} .q{float: right;width: 64px;text-align: right;} .l{background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size: 1em;}</style>";
 //const char* serverIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='UPDATE'></form>";
 
-const char* www_username = "GROWMAT";
+const char* www_username = "ESPNODE";
 char www_password[20];
 
 #define THINGSSPEAK
@@ -851,7 +905,7 @@ void saveInstruments() {
 
 void startWiFiAP() {
 	isAP = true;
-	WiFi.softAP("GROWMAT", "GROWMAT");
+	WiFi.softAP("ESPNODE", "ESPNODE");
 	Serial.println("Starting AP ...");
 	deviceIP = WiFi.softAPIP();
 	Serial.print("AP IP address: ");
@@ -940,7 +994,7 @@ void setup() {
 	Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY);
 
 	Serial.print("\n\n");
-	Serial.println("GROWMAT/");
+	Serial.println("ESPNODE/");
 
 #ifndef ESP8266
 	//analogReadResolution(9);
@@ -948,7 +1002,7 @@ void setup() {
 	display.init();
 	display.setFont(ArialMT_Plain_24);
 	display.setTextAlignment(TEXT_ALIGN_LEFT);
-	display.drawString(0, 0, "GROWMAT");
+	display.drawString(0, 0, "ESPNODE");
 	display.display();
 #endif
 
@@ -973,7 +1027,7 @@ void setup() {
 	display.setTextSize(1);
 	display.setTextColor(BLACK);
 	display.setCursor(0,0);
-	display.println("GROWMAT");
+	display.println("ESPNODE");
 	display.display();
 #endif
 
@@ -1031,7 +1085,7 @@ void setup() {
 		}
 
 	} else {
-		strcpy(www_password, "GROWMAT");
+		strcpy(www_password, "ESPNODE");
 
 		for (int i = 0; i < DEVICES_NUM; i++) {
 			if(i < 4) {
@@ -1063,14 +1117,14 @@ void setup() {
 #endif
 
 #ifdef MQTT
-		//strcpy(mqttUser, "GROWMAT") ;
-		//strcpy(mqttPassword, "GROWMAT") ;
+		//strcpy(mqttUser, "ESPNODE") ;
+		//strcpy(mqttPassword, "ESPNODE") ;
 
 		strcpy(mqttServer, "broker.hivemq.com");
 		mqttUser[0] = '/0';
 		mqttPassword[0] = '/0';
 		mqttID = 0;
-		strcpy(mqttRootTopic, "GROWMAT");
+		strcpy(mqttRootTopic, "ESPNODE");
 #endif
 
 		saveApi();
@@ -1114,9 +1168,30 @@ void setup() {
 #ifdef INPUT0_PIN
 		pinMode(INPUT0_PIN, INPUT);
 #endif
+#ifdef INPUT1_PIN
+		pinMode(INPUT1_PIN, INPUT);
+#endif
+#ifdef INPUT2_PIN
+		pinMode(INPUT2_PIN, INPUT);
+#endif
+#ifdef INPUT3_PIN
+		pinMode(INPUT3_PIN, INPUT);
+#endif
 #ifdef OUTPUT0_PIN
 		digitalWrite(OUTPUT0_PIN, false);
 		pinMode(OUTPUT0_PIN, OUTPUT);
+#endif
+#ifdef OUTPUT1_PIN
+		digitalWrite(OUTPUT1_PIN, false);
+		pinMode(OUTPUT1_PIN, OUTPUT);
+#endif
+#ifdef OUTPUT2_PIN
+		digitalWrite(OUTPUT2_PIN, false);
+		pinMode(OUTPUT2_PIN, OUTPUT);
+#endif
+#ifdef OUTPUT3_PIN
+		digitalWrite(OUTPUT3_PIN, false);
+		pinMode(OUTPUT3_PIN, OUTPUT);
 #endif
 	}
 
@@ -1209,7 +1284,7 @@ void setup() {
 
 #ifdef INPUT0_PIN
 	if (digitalRead(INPUT0_PIN) == LOW) {
-		strcpy(www_password, "GROWMAT");
+		strcpy(www_password, "ESPNODE");
 	}
 #endif
 
@@ -1251,7 +1326,7 @@ void setup() {
 
 		WiFiManager wifiManager;
 		//wifiManager.resetSettings();
-		//wifiManager.startConfigPortal("GROWMAT");
+		//wifiManager.startConfigPortal("ESPNODE");
 		wifiManager.startConfigPortal();
 	} else {
 
@@ -1610,10 +1685,10 @@ void setup() {
 
 			message += "MODE!<br><input name=newMode value=";
 			message += newMode;
-			message += "><br><br>";
-			message += "ACTUAL MODE<br>";
+			message += "><h3>";
+			message += "ACTUAL MODE: ";
 			message += mode;
-			message += "<br>";
+			message += "</h3>";
 
 			//#define MODE_2_OUT_IN	1
 			//#define MODE_2_US		2
@@ -2317,14 +2392,25 @@ void loop() {
 	//per minute
 	//}
 
-#ifdef INPUT0_PIN
+
 	if(mode == MODE_2_OUT_IN) {
+#ifdef INPUT0_PIN
 		devices[0].val = digitalRead(INPUT0_PIN);
 		bitWrite(devices[0].flags, OUTPUT_BIT, digitalRead(INPUT0_PIN));
-	}
 #endif
-
-
+#ifdef INPUT1_PIN
+		devices[1].val = digitalRead(INPUT1_PIN);
+		bitWrite(devices[1].flags, OUTPUT_BIT, digitalRead(INPUT1_PIN));
+#endif
+#ifdef INPUT2_PIN
+		devices[2].val = digitalRead(INPUT2_PIN);
+		bitWrite(devices[2].flags, OUTPUT_BIT, digitalRead(INPUT2_PIN));
+#endif
+#ifdef INPUT3_PIN
+		devices[3].val = digitalRead(INPUT3_PIN);
+		bitWrite(devices[3].flags, OUTPUT_BIT, digitalRead(INPUT3_PIN));
+#endif
+	}
 
 	if (millis() - lastMillis >= 1000) {
 		/////////////////////////////////////
@@ -2334,7 +2420,7 @@ void loop() {
 		connectWiFi();
 
 #ifdef ESP8266
-		if(secCounter % 15 == 0)
+		if(secCounter % 20 == 0)
 			loopComm(0);
 #endif
 
@@ -2625,13 +2711,16 @@ void loop() {
 #ifdef OUTPUT0_PIN
 			digitalWrite(OUTPUT0_PIN, not(bitRead(devices[4].flags, OUTPUT_BIT)));
 #endif
-		}
-
 #ifdef OUTPUT1_PIN
-		digitalWrite(OUTPUT1_PIN, not(bitRead(devices[1].flags, OUTPUT_BIT)));
-		digitalWrite(OUTPUT2_PIN, not(bitRead(devices[2].flags, OUTPUT_BIT)));
-		digitalWrite(OUTPUT3_PIN, not(bitRead(devices[3].flags, OUTPUT_BIT)));
+			digitalWrite(OUTPUT1_PIN, not(bitRead(devices[5].flags, OUTPUT_BIT)));
 #endif
+#ifdef OUTPUT2_PIN
+			digitalWrite(OUTPUT2_PIN, not(bitRead(devices[6].flags, OUTPUT_BIT)));
+#endif
+#ifdef OUTPUT3_PIN
+			digitalWrite(OUTPUT3_PIN, not(bitRead(devices[7].flags, OUTPUT_BIT)));
+#endif
+		}
 
 #ifdef MQTT
 		//if (!mqttLock.test_and_set() && mqttServer[0] != 0) {

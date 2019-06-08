@@ -2,7 +2,7 @@
 //This is a automatic generated file
 //Please do not modify this file
 //If you touch this file your change will be overwritten during the next build
-//This file has been generated on 2019-06-08 16:20:41
+//This file has been generated on 2019-06-08 20:39:50
 
 #include "Arduino.h"
 #include "Arduino.h"
@@ -73,8 +73,7 @@ extern Timezone CE;
 #define UNACK_BIT 3
 #define RUNONCE_BIT 4
 #define PREVOUTPUT_BIT 5
-#define MQTT_CLIENTID   "GROWMAT-"
-#define MQTT_ROOT_TOPIC	"GROWMAT/"
+#define MQTT_CLIENTID   "ESPNODE-"
 extern char msg[];
 #define ARDUINO_RUNNING_CORE 1
 extern const char* host;
