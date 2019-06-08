@@ -1,15 +1,16 @@
 #include "Arduino.h"
 
-#define MODE_2_INOUT	1
-#define MODE_2_US		2
-#define MODE_2_DHT22	3
-#define MODE_2_COUNT	4
+#define MODE_2_OUT_IN		1
+#define MODE_2_US			2
+#define MODE_2_OUT_DHT22	3
+#define MODE_2_OUT_COUNT	4
 int mode;
 int newMode;
 
 #define CONFIG_WIFI_PIN 0
 #define INPUT0_PIN 3	//RX	//5	//1	//TX
 #define OUTPUT0_PIN 2
+unsigned long outOnSecCounter[4];
 
 //#define INPUT1_PIN 4	//2
 //#define INPUT2_PIN 14	//3	//RX
@@ -26,6 +27,7 @@ DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
 //TODO: set time zone and year, month, day
 //#include "Arduino.h"
 //#include "libraries/WiFiManager/src/WiFiManager.h"
+#define NTP
 #ifdef NTP
 #include "libraries/NTPClient.h"
 #include "libraries/Timezone.h"
@@ -71,12 +73,11 @@ WebServer httpServer(80);
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
 
-#define DEVICES_NUM 6 //2 //3
+#define DEVICES_NUM 8 //2 //3
 
 WiFiClient espClient;
 IPAddress deviceIP;
 bool isAP;
-bool isNoComm[DEVICES_NUM];
 volatile int deviceCommIndex;
 bool isCheckIn = false;
 bool isErrorConn = false;
@@ -134,8 +135,8 @@ DallasTemperature oneWireSensors(&oneWire);
 #define DHT22 22	// DHT 22 (AM2302)
 #define DHT21 21	// DHT 21 (AM2301)
 #include "libraries/DHT.h"
-//DHT dht(DHT_PIN, DHT22);
-DHT* pDHT;
+DHT dht(DHT_PIN, DHT22);
+//DHT* pDHT;
 //float temperature;
 //float humidity;
 #endif
@@ -173,17 +174,15 @@ Timezone CE(CEST, CET);
 #ifdef MQTT
 //const char* mqtt_server = "broker.hivemq.com";//"iot.eclipse.org";
 //const char* mqtt_server = "iot.eclipse.org";
+
 #define MQTT_CLIENTID   "GROWMAT-"
-#define ROOT_TOPIC		"GROWMAT/"
-//#define LEVEL_VAL_TOPIC	"/level/val"
-//#define LEVEL_MAX_TOPIC	"/level/max"
-//#define LEVEL_MIN_TOPIC	"/level/min"
-#define A_TOPIC 	"/A"
-#define B_TOPIC 	"/B"
-#define C_TOPIC 	"/C"
-#define D_TOPIC 	"/D"
-#define E_TOPIC 	"/E"
-#define F_TOPIC 	"/F"
+#define MQTT_ROOT_TOPIC	"GROWMAT/"
+//#define A_TOPIC 	"/A"
+//#define B_TOPIC 	"/B"
+//#define C_TOPIC 	"/C"
+//#define D_TOPIC 	"/D"
+//#define E_TOPIC 	"/E"
+//#define F_TOPIC 	"/F"
 
 //#define A_VAL_TOPIC 	"/A/val"
 //#define A_CMP_TOPIC     "/A/cmd" /* 1=on, 0=off */
@@ -491,6 +490,9 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 		Serial.print((char)payload[i]);
 	}
 	Serial.println();
+
+	int i = topic[strlen(topic) - 1] - 48;
+	/*
 	int i = -1;
 	if(strstr(topic, A_TOPIC))
 		i = 0;
@@ -504,6 +506,7 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 		i = 4;
 	if(strstr(topic, F_TOPIC))
 		i = 5;
+		*/
 	if(i > -1 && i < DEVICES_NUM) {
 		if((char)payload[0]=='0') {
 			bitClear(devices[i].flags, OUTPUT_BIT);
@@ -526,7 +529,7 @@ void mqttConnect() {
 		yield();
 		//Serial.print("MQTT connecting ...");
 		if(mqttClient.connect(mqttClientId.c_str(), mqttUser, mqttPassword)) {;
-			mqttClient.subscribe(String(ROOT_TOPIC + String(mqttID) + "/cmd/#").c_str());
+			mqttClient.subscribe(String(mqttRootTopic + String(mqttID) + "/cmd/#").c_str());
 			mqttState = mqttClient.state();
 			break;
 		}
@@ -567,6 +570,7 @@ char talkbackApiKey[20];
 char mqttServer[20];
 char mqttUser[20];
 char mqttPassword[20];
+char mqttRootTopic[20];
 unsigned int mqttID;
 String mqttClientId;
 #endif
@@ -630,15 +634,15 @@ unsigned long secCounter = 0;
 //bool secOverflow;
 
 #define EEPROM_FILANEME_ADDR 124
-#define EEPROM_OFFSET 128 //64 //8
+#define EEPROM_OFFSET 256 //64 //8
 
 String getDeviceForm(int i, struct Device devices[]) {
 	Device d = devices[i];
 	String s = "<form action=/dev><input type=hidden name=id value=";
 	s += i;
 	s += "><h2>ID ";
-	//s += char(i + 65);
-	s += String(d.par4);
+	s += char(i + 48);
+	//s += String(d.par4);
 	s += ": ";
 	s += String(d.name);
 
@@ -649,7 +653,7 @@ String getDeviceForm(int i, struct Device devices[]) {
 	//		s += " AUTO";
 	s += "<br>";
 
-	if (i < DEVICES_NUM) {
+	if (i >= 4) {
 		s += "STATE: ";
 		s += String(bitRead(devices[i].flags, OUTPUT_BIT));
 		s += "<br>";
@@ -657,29 +661,50 @@ String getDeviceForm(int i, struct Device devices[]) {
 		s += String(devices[i].val);
 		s += "</h2>";
 	}
-	/*
-	if (i == DEVICES_NUM - 2) {
-		s += "TEMPERATURE [C]: ";
-		s += String(temperature);
-		s += "</h2>";
-		s += "ALARM: ";
-		s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+
+	if(mode == MODE_2_OUT_COUNT) {
+		if (i == 0) {
+			s += "COUNTER [-]: ";
+			s += String(devices[i].val);
+			s += "</h2>";
+			s += "ALARM: ";
+			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+		}
 	}
-	if (i == DEVICES_NUM - 1) {
-		s += "HUMIDITY [%]: ";
-		s += String(humidity);
-		s += "</h2>";
-		s += "ALARM: ";
-		s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+
+	if(mode == MODE_2_US) {
+		if (i == 0) {
+			s += "DISTANCE [mm]: ";
+			s += String(devices[i].val);
+			s += "</h2>";
+			s += "ALARM: ";
+			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+		}
 	}
-	*/
+
+	if(mode == MODE_2_OUT_DHT22) {
+		if (i == 0) {
+			s += "TEMPERATURE [C]: ";
+			s += String(devices[i].val);
+			s += "</h2>";
+			s += "ALARM: ";
+			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+		}
+		if (i == 1) {
+			s += "HUMIDITY [%]: ";
+			s += String(devices[i].val);
+			s += "</h2>";
+			s += "ALARM: ";
+			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+		}
+	}
 	//	if (bitRead(devices[i].flags, OUTPUT_BIT))
 	//		s += " ON";
 	//	else
 	//		s += " OFF";
 	//}
 	//s += "</h2>";
-	if (i == DEVICES_NUM - 2) {
+	if (i >= 4) {
 		s += "<button type=submit name=cmd value=off>OFF</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=on>ON</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=auto>AUTO</button>";
 	//  s += "<button type=submit name=cmd value=off>OFF</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=on>ON</button>";
 	}
@@ -689,29 +714,53 @@ String getDeviceForm(int i, struct Device devices[]) {
 	s += d.name;
 	s += "\">";
 
+	/*
 	if (i < DEVICES_NUM) {
 		s += "<hr>PAR1<br><input name=par1 value=";
 		s += d.par1;
 		s += "><hr>PAR2<br><input name=par2 value=";
 		s += d.par2;
-		s += "><hr>PERIODIC TRANSFER [SEC]<br><input name=par3 value=";
+		s += "><hr>PAR3<br><input name=par3 value=";
 		s += d.par3;
-		s += "><hr>ID<br><input name=par4 value=";
+		s += "><hr>PAR4<br><input name=par4 value=";
+		s += d.par4;
+		s += ">";
+	}
+	*/
+	if (i >= 4) {
+		s += "<hr>TIME ON [h]<br><input name=par1 value=";
+		s += d.par1;
+		s += "><hr>TIME ON [m]<br><input name=par2 value=";
+		s += d.par2;
+		s += "><hr>TIME OFF [m]<br><input name=par3 value=";
+		s += d.par3;
+		s += "><hr>TIME OFF [s]<br><input name=par4 value=";
+		s += d.par4;
+		s += ">";
+	}
+
+	if (i < 4) {
+		if(mode == MODE_2_OUT_COUNT) {
+			s += "<hr>PULSES<br><input name=par1 value=";
+			s += d.par1;
+			s += "><hr>TIME [s]<br><input name=par2 value=";
+			s += d.par2;
+			s += ">";
+		}
+		else {
+			s += "<hr>HIGH ALARM<br><input name=par1 value=";
+			s += d.par1;
+			s += "><hr>LOW ALARM<br><input name=par2 value=";
+			s += d.par2;
+			s += ">";
+		}
+		s += " <hr>PAR3<br><input name=par3 value=";
+		s += d.par3;
+		s += "><hr>PAR4<br><input name=par4 value=";
 		s += d.par4;
 		s += ">";
 	}
 	/*
-	if (i == DEVICES_NUM - 2) {
-		s += "<hr>HIGH ALARM [C]<br><input name=par1 value=";
-		s += d.par1;
-		s += "><hr>LOW ALARM [C]<br><input name=par2 value=";
-		s += d.par2;
-		s += "><hr>PERIODIC TRANSFER [SEC]<br><input name=par3 value=";
-		s += d.par3;
-		s += "><hr>ID<br><input name=par4 value=";
-		s += d.par4;
-		s += ">";
-	}
 	if (i == DEVICES_NUM - 1) {
 		s += "<hr>HIGH ALARM [%]<br><input name=par1 value=";
 		s += d.par1;
@@ -777,14 +826,16 @@ void saveApi() {
 	offset += sizeof(mqttPassword);
 	EEPROM.put(offset, mqttID);
 	offset += sizeof(mqttID);
+	EEPROM.put(offset, mqttRootTopic);
+	offset += sizeof(mqttRootTopic);
 #endif
 
 	EEPROM.put(0, 0);
 	EEPROM.commit();
 
 #ifdef MQTT
-	mqttRootTopicVal = String(ROOT_TOPIC + String(mqttID) + "/val");
-	mqttRootTopicState = String(ROOT_TOPIC + String(mqttID) + "/sta");
+	mqttRootTopicVal = String(mqttRootTopic + String(mqttID) + "/val");
+	mqttRootTopicState = String(mqttRootTopic + String(mqttID) + "/sta");
 	mqttClient.setServer(mqttServer, 1883);
 #endif
 
@@ -889,7 +940,7 @@ void setup() {
 	Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY);
 
 	Serial.print("\n\n");
-	Serial.println("GROWMAT");
+	Serial.println("GROWMAT/");
 
 #ifndef ESP8266
 	//analogReadResolution(9);
@@ -969,6 +1020,8 @@ void setup() {
 		EEPROM.get(offset, mqttID);
 		offset += sizeof(mqttID);
 		mqttClient.setServer(mqttServer, 1883);
+		EEPROM.get(offset, mqttRootTopic);
+		offset += sizeof(mqttRootTopic);
 #endif
 
 		for (int i = 0; i < DEVICES_NUM; i++) {
@@ -981,8 +1034,16 @@ void setup() {
 		strcpy(www_password, "GROWMAT");
 
 		for (int i = 0; i < DEVICES_NUM; i++) {
-			devices[i].name[0] = i + 48;
-			devices[i].name[1] = 0;
+			if(i < 4) {
+				strcpy(devices[i].name, "IN ");
+				devices[i].name[3] = i + 48;
+				devices[i].name[4] = 0;
+			}
+			else {
+				strcpy(devices[i].name, "OUT ");
+				devices[i].name[4] = i + 48;
+				devices[i].name[5] = 0;
+			}
 			devices[i].par1 = 0;
 			devices[i].par2 = 0;
 			devices[i].par3 = 0;
@@ -1009,6 +1070,7 @@ void setup() {
 		mqttUser[0] = '/0';
 		mqttPassword[0] = '/0';
 		mqttID = 0;
+		strcpy(mqttRootTopic, "GROWMAT");
 #endif
 
 		saveApi();
@@ -1016,8 +1078,8 @@ void setup() {
 	}
 
 #ifdef MQTT
-	mqttRootTopicVal = String(ROOT_TOPIC + String(mqttID) + "/val");
-	mqttRootTopicState = String(ROOT_TOPIC + String(mqttID) + "/sta");
+	mqttRootTopicVal = String(mqttRootTopic + String(mqttID) + "/val");
+	mqttRootTopicState = String(mqttRootTopic + String(mqttID) + "/sta");
 #endif
 
 #ifdef CONFIG_WIFIAP_PIN
@@ -1034,16 +1096,21 @@ void setup() {
 #endif
 	}
 
+	if(mode == MODE_2_OUT_DHT22) {
 #ifdef DHT_PIN
-	if(mode == MODE_2_DHT22) {
 		//dht.begin();
-		DHT dht(DHT_PIN, DHT22);
+		//DHT dht(DHT_PIN, DHT22);
 		dht.begin();
-		pDHT = &dht;
-	}
+		//pDHT = &dht;
 #endif
+#ifdef OUTPUT0_PIN
+		digitalWrite(OUTPUT0_PIN, false);
+		pinMode(OUTPUT0_PIN, OUTPUT);
+#endif
+	}
 
-	if(mode == MODE_2_INOUT) {
+
+	if(mode == MODE_2_OUT_IN) {
 #ifdef INPUT0_PIN
 		pinMode(INPUT0_PIN, INPUT);
 #endif
@@ -1053,11 +1120,15 @@ void setup() {
 #endif
 	}
 
-	if(mode == MODE_2_COUNT) {
+	if(mode == MODE_2_OUT_COUNT) {
 #ifdef INPUT0_PIN
 		//pinMode(INPUT0_PIN, FUNCTION_3);
 		pinMode(INPUT0_PIN, INPUT);
 		attachInterrupt(digitalPinToInterrupt(INPUT0_PIN), handleInterrupt0, FALLING);
+#endif
+#ifdef OUTPUT0_PIN
+		digitalWrite(OUTPUT0_PIN, false);
+		pinMode(OUTPUT0_PIN, OUTPUT);
 #endif
 #ifdef INPUT1_PIN
 		pinMode(INPUT1_PIN, INPUT_PULLUP);
@@ -1461,7 +1532,7 @@ void setup() {
 			breakTime(t, tm);
 
 
-			message += "<hr>";
+			//message += "<hr>";
 			message += "<form action=/savesettings>";
 			message += "HOURS<br><input name=hour value=";
 		//message += timeClient.getHours();
@@ -1530,6 +1601,8 @@ void setup() {
 			message += "><br>";
 			message += "<br>MQTT ID<br><input name=mqttid value=";
 			message += mqttID;
+			message += "><br>MQTT ROOT TOPIC (/)<br><input name=mqttroottopic value=";
+			message += mqttRootTopic;
 			message += "><hr>";
 #endif
 
@@ -1540,14 +1613,14 @@ void setup() {
 			message += mode;
 			message += "<br>";
 
-			//#define MODE_2_INOUT	1
+			//#define MODE_2_OUT_IN	1
 			//#define MODE_2_US		2
-			//#define MODE_2_DHT22	3
-			//#define MODE_2_COUNT		4
+			//#define MODE_2_OUT_DHT22	3
+			//#define MODE_2_OUT_COUNT		4
 			message += "1: GPIO IN PIN3 (RX) / OUT PIN2<br>";
 			message += "2: ULTRASONIC ECHO PIN3 (RX) / TRIGG PIN2<br>";
-			message += "3: DHT BUS PIN3 (RX)<br>";
-			message += "4: COUNTER IN PIN3 (RX)<br>";
+			message += "3: DHT BUS PIN3 (RX) / OUT PIN2<br>";
+			message += "4: COUNTER IN PIN3 (RX) / OUT PIN2<br>";
 			message += "<hr>";
 
 			//message += "<br>";
@@ -1629,6 +1702,7 @@ void setup() {
 			strcpy(mqttUser, (char*)httpServer.arg("mqttuser").c_str());
 			strcpy(mqttPassword, (char*)httpServer.arg("mqttpassword").c_str());
 			mqttID = httpServer.arg("mqttid").toInt();
+			strcpy(mqttRootTopic, (char*)httpServer.arg("mqttroottopic").c_str());
 #endif
 			newMode = httpServer.arg("newMode").toInt();
 
@@ -1840,6 +1914,24 @@ int makeHttpGet(int i) {
 	return httpCode;
 }
 
+bool setAlarm(Device* pDevice) {
+	//if(!bitRead(device.flags, OUTPUT_BIT))
+	//	bitSet(device.flags, UNACK_BIT);
+	//bitSet(device.flags, OUTPUT_BIT);
+	if(!bitRead(pDevice->flags, OUTPUT_BIT))
+		bitSet(pDevice->flags, UNACK_BIT);
+	bitSet(pDevice->flags, OUTPUT_BIT);
+}
+
+bool clearAlarm(Device* pDevice) {
+	//if(bitRead(device.flags, OUTPUT_BIT))
+	//	bitSet(device.flags, UNACK_BIT);
+	//bitClear(device.flags, OUTPUT_BIT);
+	if(bitRead(pDevice->flags, OUTPUT_BIT))
+		bitSet(pDevice->flags, UNACK_BIT);
+	bitClear(pDevice->flags, OUTPUT_BIT);
+}
+
 ////////////////////////
 // communication loop
 ////////////////////////
@@ -1866,6 +1958,7 @@ void loopComm(void *pvParameters) {
 			DRAWMESSAGE(display, "MQTT CONN ...");
 			/* this function will listen for incoming subscribed topic-process-invoke receivedCallback */
 			mqttClient.loop();
+
 			if (!mqttClient.connected()) {
 				mqttConnect();
 			}
@@ -1886,7 +1979,8 @@ void loopComm(void *pvParameters) {
 				*/
 
 				for(int i = 0; i < DEVICES_NUM; i++) {
-					String mqttTopic = String();
+					String mqttTopic = String('/' + String(i));
+					/*
 					if(i == 0)
 						mqttTopic += A_TOPIC;
 					if(i == 1)
@@ -1899,7 +1993,7 @@ void loopComm(void *pvParameters) {
 						mqttTopic += E_TOPIC;
 					if(i == 5)
 						mqttTopic += F_TOPIC;
-
+					*/
 					String mqttTopicState = String(mqttRootTopicState + mqttTopic);
 					String mqttTopicVal = String(mqttRootTopicVal + mqttTopic);
 
@@ -2182,32 +2276,7 @@ void loop() {
 
 	drd.loop();
 
-	devices[DEVICES_NUM - 1].val = millis();
-
-#ifdef ESP8266
-	if(secCounter % 16 == 0) {
-		if(isNoComm[0]) {
-			loopComm(0);
-			isNoComm[0] = false;
-		}
-	}
-	else
-		isNoComm[0] = true;
-
-	/*
-	for(int i = 0; i < DEVICES_NUM; i++) {
-		if(devices[i].par3 && (secCounter % devices[i].par3 == 0)) {
-			if(isNoComm[i]) {
-				deviceCommIndex = i;
-				loopComm(0);
-				isNoComm[i] = false;
-			}
-		}
-		else
-			isNoComm[i] = true;
-	}
-	*/
-#endif
+	//devices[DEVICES_NUM - 1].val = millis();
 
 	//bool alarm = bitRead(devices[DEV_ALARM].flags, OUTPUT_BIT);
 	//bool unack = bitRead(devices[0].flags, UNACK_BIT);
@@ -2247,17 +2316,25 @@ void loop() {
 	//}
 
 #ifdef INPUT0_PIN
-	if(mode == MODE_2_INOUT) {
+	if(mode == MODE_2_OUT_IN) {
 		devices[0].val = digitalRead(INPUT0_PIN);
 		bitWrite(devices[0].flags, OUTPUT_BIT, digitalRead(INPUT0_PIN));
 	}
-	//if(mode == MODE_2_OUT) {
-	//	digitalWrite(INPUT0_PIN, bitRead(devices[0].flags, OUTPUT_BIT));
-	//}
 #endif
 
+
+
 	if (millis() - lastMillis >= 1000) {
+		/////////////////////////////////////
+		// second
+		/////////////////////////////////////
+
 		connectWiFi();
+
+#ifdef ESP8266
+		if(secCounter % 15 == 0)
+			loopComm(0);
+#endif
 
 #ifdef LED0_PIN
 		digitalWrite(LED0_PIN, secCounter & 1);
@@ -2277,48 +2354,33 @@ void loop() {
 			long d = pulseIn(INPUT0_PIN, HIGH);
 			devices[0].val = (d/2) * 34.3; //[mm]
 
-			if(devices[0].val > devices[0].par1 || devices[0].val < devices[0].par2) {
-				if(!bitRead(devices[0].flags, OUTPUT_BIT))
-						bitSet(devices[0].flags, UNACK_BIT);
-					bitSet(devices[0].flags, OUTPUT_BIT);
-			}
-			else {
-				if(bitRead(devices[0].flags, OUTPUT_BIT))
-					bitSet(devices[0].flags, UNACK_BIT);
-				bitClear(devices[0].flags, OUTPUT_BIT);
-			}
+			if(devices[0].val > devices[0].par1 || devices[0].val < devices[0].par2)
+				setAlarm(&devices[0]);
+			else
+				clearAlarm(&devices[0]);
 		}
-
 #endif
 
 #ifdef DHT_PIN
-		if(mode == MODE_2_DHT22) {
-			//float t = dht.readTemperature();
-			float t = pDHT->readTemperature();
+		if(mode == MODE_2_OUT_DHT22) {
+			float t = dht.readTemperature();
+			//float t = pDHT->readTemperature();
 			if(!isnan(t))
 				devices[0].val = t;
-			//float h = dht.readHumidity();
-			float h = pDHT->readHumidity();
+			float h = dht.readHumidity();
+			//float h = pDHT->readHumidity();
 			if(!isnan(t))
 				devices[1].val = h;
-
 			for(int i = 0; i < 2; i++) {
-				if(devices[i].val > devices[i].par1 || devices[i].val < devices[i].par2) {
-					if(!bitRead(devices[i].flags, OUTPUT_BIT))
-						bitSet(devices[i].flags, UNACK_BIT);
-					bitSet(devices[i].flags, OUTPUT_BIT);
-				}
-				else {
-					if(bitRead(devices[i].flags, OUTPUT_BIT))
-						bitSet(devices[i].flags, UNACK_BIT);
-					bitClear(devices[i].flags, OUTPUT_BIT);
-				}
+				if(devices[i].val > devices[i].par1 || devices[i].val < devices[i].par2)
+					setAlarm(&devices[i]);
+				else
+					clearAlarm(&devices[i]);
 			}
 		}
 #endif
 
-
-		if(mode == MODE_2_COUNT) {
+		if(mode == MODE_2_OUT_COUNT) {
 			for(int i = 0; i < COUNTERS_NUM; i++) {
 				devices[i].val = counter[i];
 
@@ -2327,18 +2389,18 @@ void loop() {
 
 				uint8_t countersIndexCompare = countersIndex - devices[i].par2;
 				countersIndexCompare %= COUNTERBUFFER_SIZE;
+				//Serial.print(counters[countersIndex][i] - counters[countersIndexCompare][i]);
+				//Serial.println();
 
 				if(counters[countersIndex][i] - counters[countersIndexCompare][i] > devices[i].par1) {
-					if(!bitRead(devices[i].flags, OUTPUT_BIT))
-						bitSet(devices[i].flags, UNACK_BIT);
-					bitSet(devices[i].flags, OUTPUT_BIT);
+					setAlarm(&devices[i]);
 				}
 				else {
-					if(bitRead(devices[i].flags, OUTPUT_BIT))
-						bitSet(devices[i].flags, UNACK_BIT);
-					bitClear(devices[i].flags, OUTPUT_BIT);
+					clearAlarm(&devices[i]);
 				}
+				//Serial.println(devices[i].flags);
 			}
+			countersIndex++;
 		}
 
 		//uint8_t countersIndexCompare = countersIndex - devices[0].par2;
@@ -2369,14 +2431,47 @@ void loop() {
 		Serial.println();
 		*/
 
-		for(int i = 0; i < DEVICES_NUM - 2; i++) {
+		for(int i = 4;  i < 8; i++) {
+			unsigned int onSec = devices[i].par1 * 3600 + devices[i].par2 * 60;
+			unsigned int offSec = devices[i].par3 * 60 + devices[i].par4;
+
+			//unsigned int onSec = timeClient.getHours() * 3600 + timeClient.getMinutes() * 60;
+			time_t t = CE.toLocal(timeClient.getEpochTime());
+			byte h = (t / 3600) % 24;
+			byte m = (t / 60) % 60;
+			byte s = t % 60;
+			unsigned int sec = h * 3600 + m * 60;
+
+			if(onSec) {
+				if(onSec == sec) {
+					Serial.println(String(i) + ": onTime");
+					bitClear(devices[i].flags, MANUAL_BIT);
+					bitSet(devices[i].flags, OUTPUT_BIT);
+				}
+			}
+
+			if(offSec) {
+				if(outOnSecCounter[i - 4] > offSec) {
+					Serial.println(String(i) + ": offTime");
+					bitClear(devices[i].flags, MANUAL_BIT);
+					bitClear(devices[i].flags, OUTPUT_BIT);
+					outOnSecCounter[i - 4] = 0;
+				}
+			}
+
+			if(bitRead(devices[i].flags, OUTPUT_BIT)) {
+				outOnSecCounter[i - 4]++;
+			}
+		}
+/*
+		for(int i = 0; i < 4; i++) {
 			bool isAlarm = false;
 
-			if(mode == MODE_2_COUNT) {
+			if(mode == MODE_2_OUT_COUNT) {
 				if(i < COUNTERS_NUM) {
 					uint8_t countersIndexCompare = countersIndex - devices[i].par2;
 					countersIndexCompare %= COUNTERBUFFER_SIZE;
-
+*/
 					/*
 					Serial.println();
 					Serial.println(i);
@@ -2399,28 +2494,19 @@ void loop() {
 					Serial.print(counters[countersIndex][i] - counters[countersIndexCompare][i]);
 					Serial.println();
 					*/
-
+/*
 					if(counters[countersIndex][i] - counters[countersIndexCompare][i] > devices[i].par1) {
 						isAlarm= true;
 					}
-
 				}
 			}
 
-			if(isAlarm) {
-				if(!bitRead(devices[i].flags, OUTPUT_BIT))
-					bitSet(devices[i].flags, UNACK_BIT);
-				bitSet(devices[i].flags, OUTPUT_BIT);
-			}
-			else {
-				if(bitRead(devices[i].flags, OUTPUT_BIT))
-					bitSet(devices[i].flags, UNACK_BIT);
-				bitClear(devices[i].flags, OUTPUT_BIT);
-			}
-
-			countersIndex++;
+			if(isAlarm)
+				setAlarm(devices[i]);
+			else
+				clearAlarm(devices[i]);
 		}
-
+*/
 		//Serial.println(millis());
 		for(int i = 0; i < DEVICES_NUM; i++) {
 
@@ -2451,7 +2537,6 @@ void loop() {
 				bitClear(devices[i].flags, UNACK_BIT);
 			}
 		}
-
 
 #ifdef MQTT
 		//if (!mqttLock.test_and_set()) {
@@ -2534,9 +2619,9 @@ void loop() {
 //		digitalWrite(LED0_PIN, not (bitRead(devices[DEV_ALARM_MAX].flags, OUTPUT_BIT) | bitRead(devices[DEV_ALARM_MIN].flags, OUTPUT_BIT)));
 #endif
 
-		if(mode == MODE_2_INOUT) {
+		if(mode == MODE_2_OUT_IN || mode == MODE_2_OUT_DHT22 || mode == MODE_2_OUT_COUNT) {
 #ifdef OUTPUT0_PIN
-			digitalWrite(OUTPUT0_PIN, not(bitRead(devices[DEVICES_NUM - 2].flags, OUTPUT_BIT)));
+			digitalWrite(OUTPUT0_PIN, not(bitRead(devices[4].flags, OUTPUT_BIT)));
 #endif
 		}
 
@@ -2574,7 +2659,8 @@ void loop() {
 								bitClear(devices[i].flags, PREVOUTPUT_BIT);
 							snprintf(msg, 20, "%d", bitRead(devices[i].flags, OUTPUT_BIT));
 
-							String mqttTopic = String();
+							String mqttTopic = String('/' + String(i));
+							/*
 							if(i == 0)
 								mqttTopic += A_TOPIC;
 							if(i == 1)
@@ -2587,37 +2673,13 @@ void loop() {
 								mqttTopic += E_TOPIC;
 							if(i == 5)
 								mqttTopic += F_TOPIC;
-
+							*/
 							String mqttTopicState = String(mqttRootTopicState + mqttTopic);
 							mqttClient.publish(mqttTopicState.c_str(), msg);
 							Serial.print(mqttTopicState);
 							Serial.print(": ");
 							Serial.println(msg);
 
-							/*
-							if (i == 0)
-								mqttClient.publish(String(mqttRootTopicState + A_TOPIC).c_str(), msg);
-							if (i == 1)
-								mqttClient.publish(String(mqttRootTopicState + B_TOPIC).c_str(), msg);
-							if (i == 2)
-								mqttClient.publish(String(mqttRootTopicState + C_TOPIC).c_str(), msg);
-							if (i == 3)
-								mqttClient.publish(String(mqttRootTopicState + D_TOPIC).c_str(), msg);
-							if (i == 4)
-								mqttClient.publish(String(mqttRootTopicState + E_TOPIC).c_str(), msg);
-							if (i == 5)
-								mqttClient.publish(String(mqttRootTopicState + F_TOPIC).c_str(), msg);
-							*/
-							/*
-							if (i == DEV_ALARM_MAX) {
-								mqttClient.publish(
-										String(mqttRootTopicVal + LEVEL_MAX_TOPIC).c_str(), msg);
-							}
-							if (i == DEV_ALARM_MIN) {
-								mqttClient.publish(
-										String(mqttRootTopicVal + LEVEL_MIN_TOPIC).c_str(), msg);
-							}
-							*/
 						}
 					}
 					DRAWMESSAGE(display, "MQTT DONE");

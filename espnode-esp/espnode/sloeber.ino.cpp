@@ -2,23 +2,27 @@
 //This is a automatic generated file
 //Please do not modify this file
 //If you touch this file your change will be overwritten during the next build
-//This file has been generated on 2019-06-07 19:15:13
+//This file has been generated on 2019-06-08 15:11:13
 
 #include "Arduino.h"
 #include "Arduino.h"
-#define MODE_2_INOUT	1
-#define MODE_2_US		2
-#define MODE_2_DHT22	3
-#define MODE_2_COUNT	4
+#define MODE_2_OUT_IN		1
+#define MODE_2_US			2
+#define MODE_2_OUT_DHT22	3
+#define MODE_2_OUT_COUNT	4
 extern int mode;
 extern int newMode;
 #define CONFIG_WIFI_PIN 0
 #define INPUT0_PIN 3
 #define OUTPUT0_PIN 2
+extern unsigned long outOnSecCounter[];
 #include "libraries/DoubleResetDetector.h"
 #define DRD_TIMEOUT 10
 #define DRD_ADDRESS 0
 extern DoubleResetDetector drd;
+#define NTP
+#include "libraries/NTPClient.h"
+#include "libraries/Timezone.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
@@ -34,11 +38,10 @@ extern ESP8266HTTPUpdateServer httpUpdater;
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
-#define DEVICES_NUM 6
+#define DEVICES_NUM 8
 extern WiFiClient espClient;
 extern IPAddress deviceIP;
 extern bool isAP;
-extern bool isNoComm[];
 extern volatile int deviceCommIndex;
 extern bool isCheckIn;
 extern bool isErrorConn;
@@ -52,13 +55,18 @@ extern uint8_t countersIndex;
 #define DHT22 22
 #define DHT21 21
 #include "libraries/DHT.h"
-extern DHT* pDHT;
+extern DHT dht;
 #define MQTT
 #include <PubSubClient.h>
 extern PubSubClient mqttClient;
 extern String mqttRootTopicVal;
 extern String mqttRootTopicState;
 extern int mqttState;
+extern WiFiUDP ntpUDP;
+extern NTPClient timeClient;
+extern TimeChangeRule CEST;
+extern TimeChangeRule CET;
+extern Timezone CE;
 #define OUTPUT_BIT 0
 #define MANUAL_BIT 1
 #define CMD_BIT 2
@@ -66,13 +74,7 @@ extern int mqttState;
 #define RUNONCE_BIT 4
 #define PREVOUTPUT_BIT 5
 #define MQTT_CLIENTID   "GROWMAT-"
-#define ROOT_TOPIC		"GROWMAT/"
-#define A_TOPIC 	"/A"
-#define B_TOPIC 	"/B"
-#define C_TOPIC 	"/C"
-#define D_TOPIC 	"/D"
-#define E_TOPIC 	"/E"
-#define F_TOPIC 	"/F"
+#define MQTT_ROOT_TOPIC	"GROWMAT/"
 extern char msg[];
 #define ARDUINO_RUNNING_CORE 1
 extern const char* host;
@@ -91,6 +93,7 @@ extern char talkbackApiKey[];
 extern char mqttServer[];
 extern char mqttUser[];
 extern char mqttPassword[];
+extern char mqttRootTopic[];
 extern unsigned int mqttID;
 extern String mqttClientId;
 extern HTTPClient http;
@@ -113,6 +116,8 @@ bool connectWiFi() ;
 void setup() ;
 String int2string(int i) ;
 int makeHttpGet(int i) ;
+bool setAlarm(Device* pDevice) ;
+bool clearAlarm(Device* pDevice) ;
 void loopComm(void *pvParameters) ;
 void loop() ;
 
