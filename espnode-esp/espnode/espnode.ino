@@ -634,7 +634,7 @@ unsigned long secCounter = 0;
 //bool secOverflow;
 
 #define EEPROM_FILANEME_ADDR 124
-#define EEPROM_OFFSET 256 //64 //8
+#define EEPROM_OFFSET 177 //64 //8
 
 String getDeviceForm(int i, struct Device devices[]) {
 	Device d = devices[i];
@@ -705,8 +705,8 @@ String getDeviceForm(int i, struct Device devices[]) {
 	//}
 	//s += "</h2>";
 	if (i >= 4) {
-		s += "<button type=submit name=cmd value=off>OFF</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=on>ON</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=auto>AUTO</button>";
-	//  s += "<button type=submit name=cmd value=off>OFF</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=on>ON</button>";
+		//s += "<button type=submit name=cmd value=off>OFF</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=on>ON</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=auto>AUTO</button>";
+		s += "<button type=submit name=cmd value=off>OFF</button>&nbsp;&nbsp;&nbsp;<button type=submit name=cmd value=on>ON</button>";
 	}
 	//s += "<h2>SETTINGS</h2>";
 	s += "<hr>NAME<br>";
@@ -1359,7 +1359,8 @@ void setup() {
 				message += i;
 				message += ">";
 				message += "ID ";
-				message += devices[i].par4;
+				//message += devices[i].par4;
+				message += char(i + 48);
 				message += ": ";
 				message += devices[i].name;
 				message += "</a>";
@@ -1601,7 +1602,8 @@ void setup() {
 			message += "><br>";
 			message += "<br>MQTT ID<br><input name=mqttid value=";
 			message += mqttID;
-			message += "><br>MQTT ROOT TOPIC (/)<br><input name=mqttroottopic value=";
+			message += "><br>";
+			message += "<br>MQTT ROOT TOPIC (/)<br><input name=mqttroottopic value=";
 			message += mqttRootTopic;
 			message += "><hr>";
 #endif
@@ -1617,7 +1619,7 @@ void setup() {
 			//#define MODE_2_US		2
 			//#define MODE_2_OUT_DHT22	3
 			//#define MODE_2_OUT_COUNT		4
-			message += "1: GPIO IN PIN3 (RX) / OUT PIN2<br>";
+			message += "1: IN PIN3 (RX) / OUT PIN2<br>";
 			message += "2: ULTRASONIC ECHO PIN3 (RX) / TRIGG PIN2<br>";
 			message += "3: DHT BUS PIN3 (RX) / OUT PIN2<br>";
 			message += "4: COUNTER IN PIN3 (RX) / OUT PIN2<br>";
