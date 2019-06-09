@@ -142,8 +142,6 @@ DallasTemperature oneWireSensors(&oneWire);
 #include "libraries/DHT.h"
 DHT dht(DHT_PIN, DHT22);
 //DHT* pDHT;
-//float temperature;
-//float humidity;
 #endif
 
 #define MQTT
@@ -165,9 +163,6 @@ TimeChangeRule CEST = { "CEST", Last, Sun, Mar, 2, 120 }; //Central European Sum
 TimeChangeRule CET = { "CET ", Last, Sun, Oct, 3, 60 }; //Central European Standard Time
 Timezone CE(CEST, CET);
 #endif
-
-//#define DEV_ALARM 1
-//#define DEV_ALARM_MIN  6
 
 #define OUTPUT_BIT 0
 #define MANUAL_BIT 1
@@ -482,6 +477,7 @@ void drawMessage(OLEDDisplay *display, String msg) {
 	Serial.println(msg);
 }
 #else
+
 void drawMessage(String msg) {
 	Serial.println(msg);
 }
@@ -513,16 +509,6 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 			for(int p = 0;  p < DEVICE_PARAMS_NUM; p++) {
 				String mqttTopic = String('/' + String(i) + "/par" + String(p));
 				String mqttTopicVal = String(mqttRootTopicVal + mqttTopic);
-				/*
-				if(p == 0)
-					snprintf(msg, 20, "%i", devices[i].par[0]);
-				if(p == 1)
-					snprintf(msg, 20, "%i", devices[i].par[1]);
-				if(p == 2)
-					snprintf(msg, 20, "%i", devices[i].par[2]);
-				if(p == 3)
-					snprintf(msg, 20, "%i", devices[i].par[3]);
-				*/
 				snprintf(msg, 20, "%i", devices[i].par[p]);
 				mqttClient.publish(mqttTopicVal.c_str(), msg);
 				Serial.print(mqttTopicVal);
@@ -542,16 +528,6 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 		if(i > -1 && i < DEVICES_NUM && p > -1 && p < DEVICE_PARAMS_NUM) {
 			strncpy(msg, (const char*)payload, length);
 			msg[length] = 0;
-			/*
-			if(p == 0)
-				devices[i].par[0] = atoi(msg);
-			if(p == 1)
-				devices[i].par[1] = atoi(msg);
-			if(p == 2)
-				devices[i].par[2] = atoi(msg);
-			if(p == 3)
-				devices[i].par[3] = atoi(msg);
-			*/
 			devices[i].par[p] = atoi(msg);
 		}
 		return;
@@ -572,7 +548,7 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 		i = 4;
 	if(strstr(topic, F_TOPIC))
 		i = 5;
-		*/
+	*/
 	if(i > -1 && i < DEVICES_NUM) {
 		if((char)payload[0]=='0') {
 			bitClear(devices[i].flags, OUTPUT_BIT);
@@ -697,7 +673,6 @@ RCSwitch rcSwitch = RCSwitch();
 unsigned long lastMillis;
 
 unsigned long secCounter = 0;
-//bool secOverflow;
 
 #define EEPROM_FILANEME_ADDR 124
 #define EEPROM_OFFSET 177 //64 //8
@@ -712,7 +687,6 @@ String getDeviceForm(int i, struct Device devices[]) {
 	s += ": ";
 	s += String(d.name);
 
-	//if (i < DEV_ALARM) {
 	//	if(bitRead(devices[i].flags, MANUAL_BIT))
 	//		s += " MANUAL";
 	//	else
@@ -848,30 +822,6 @@ String getDeviceForm(int i, struct Device devices[]) {
 		s += d.par[3];
 		s += ">";
 	}
-	/*
-	if (i == DEVICES_NUM - 1) {
-		s += "<hr>HIGH ALARM [%]<br><input name=par0 value=";
-		s += d.par0;
-		s += "><hr>LOW ALARM [%]<br><input name=par1 value=";
-		s += d.par1;
-		s += "><hr>PERIODIC TRANSFER [SEC]<br><input name=par2 value=";
-		s += d.par2;
-		s += "><hr>ID<br><input name=par3 value=";
-		s += d.par3;
-		s += ">";
-	}
-	*/
-	/*
-	if (i == DEV_ALARM) {
-		s += "<hr>ALARM NO FLOW AFTER TIME [SECOND]<br><input name=par0 value=";
-		s += d.par0;
-		//s += "><hr><br>ALARM MAX LEVEL [mm]<br><input name=par2 value=";
-		//s += d.par2;
-		//s += "><hr><br>ALARM HYST [mm]<br><input name=par3 value=";
-		//s += d.par3;
-		s += ">";
-	}
-	*/
 
 	s += "<hr><button type=submit name=cmd value=set>SET</button>";
 	s += "</form>";
@@ -947,7 +897,6 @@ void startWiFiAP() {
 }
 
 void handleInterrupt0() {
-	//counter[2]++;
 	counter[0]++;
 }
 
@@ -956,12 +905,10 @@ void handleInterrupt1() {
 }
 
 void handleInterrupt2() {
-	//counter[1]++;
 	counter[2]++;
 }
 
 void handleInterrupt3() {
-	//counter[2]++;
 	counter[3]++;
 }
 
@@ -1056,7 +1003,7 @@ void setup() {
 
 #ifdef LCD
 	display.begin();
-	display.setContrast(60);  // Adjust for your display
+	display.setContrast(60);
 	display.clearDisplay();
 	display.setTextSize(1);
 	display.setTextColor(BLACK);
@@ -1449,11 +1396,6 @@ void setup() {
 				message += "</h2>";
 #endif
 
-
-
-				//if(bitRead(devices[DEV_ALARM].flags, OUTPUT_BIT))
-				//	message += "<h2>ALARM: NO FLOW</h2>";
-
 				message += "<hr>";
 				if(isErrorConn)
 					message += "<h2>SERVER CONNECTION ERROR</h2>";
@@ -1641,112 +1583,96 @@ void setup() {
 
 #ifdef NTP
 		time_t t = CE.toLocal(timeClient.getEpochTime());
-		//byte h = (t / 3600) % 24;
-		//byte m = (t / 60) % 60;
-		//byte s = t % 60;
-			tmElements_t tm;
-			breakTime(t, tm);
+		tmElements_t tm;
+		breakTime(t, tm);
 
-
-			//message += "<hr>";
-			message += "<form action=/savesettings>";
-			message += "HOURS<br><input name=hour value=";
-		//message += timeClient.getHours();
-		//message += h;
-			message += tm.Hour;
-			message += "><br>";
-			message += "<br>MINUTES<br><input name=minute value=";
-		//message += timeClient.getMinutes();
-		//message += m;
-			message += tm.Minute;
-			message += "><br>";
-			message += "<br>SECONDS<br><input name=second value=";
-		//message += timeClient.getSeconds();
-		//message += s;
-			message += tm.Second;
-			message += "><br>";
-			message += "<br>YEAR<br><input name=year value=";
-			message += tm.Year + 1970;
-			message += "><br>";
-			message += "<br>MONTH<br><input name=month value=";
-			message += tm.Month;
-			message += "><br>";
-			message += "<br>DAY<br><input name=day value=";
-			message += tm.Day;
-			message += "><br><br>";
-			message += "<button type=submit name=cmd value=settime>SET TIME</button>";
-			message += "</form>";
-			message += "<hr>";
+		message += "<form action=/savesettings>";
+		message += "HOURS<br><input name=hour value=";
+		message += tm.Hour;
+		message += "><br>";
+		message += "<br>MINUTES<br><input name=minute value=";
+		message += tm.Minute;
+		message += "><br>";
+		message += "<br>SECONDS<br><input name=second value=";
+		message += tm.Second;
+		message += "><br>";
+		message += "<br>YEAR<br><input name=year value=";
+		message += tm.Year + 1970;
+		message += "><br>";
+		message += "<br>MONTH<br><input name=month value=";
+		message += tm.Month;
+		message += "><br>";
+		message += "<br>DAY<br><input name=day value=";
+		message += tm.Day;
+		message += "><br><br>";
+		message += "<button type=submit name=cmd value=settime>SET TIME</button>";
+		message += "</form>";
+		message += "<hr>";
 #endif
 
-			message += "<form action=/savesettings>";
+		message += "<form action=/savesettings>";
 
 #ifdef HTTP_AUTH
-			message += "ADMIN PASSWORD<br><input name=www_password value=";
-			message += www_password;
-			message += "><hr>";
+		message += "ADMIN PASSWORD<br><input name=www_password value=";
+		message += www_password;
+		message += "><hr>";
 #endif
 
 #ifdef THINGSSPEAK
-			message += "SERVER<br><input name=servername value=";
-			message += serverName;
-			message += "><br>";
-			//message += "<br>WRITE API KEY<br><input name=writeapikey value=";
-			message += "<br>SCRIPT<br><input name=writeapikey value=";
-			message += writeApiKey;
-			message += "><br>";
-			//message += "<br>TALKBACK ID<br><input name=talkbackid value=";
-			message += "<br>PORT<br><input name=talkbackid value=";
-			message += talkbackID;
-			message += "><br>";
-			//message += "<br>TALKBACK API KEY<br><input name=talkbackapikey value=";
-			message += "<br>STATION NAME<br><input name=talkbackapikey value=";
-			message += talkbackApiKey;
-			message += "><hr>";
+		message += "SERVER<br><input name=servername value=";
+		message += serverName;
+		message += "><br>";
+		//message += "<br>WRITE API KEY<br><input name=writeapikey value=";
+		message += "<br>SCRIPT<br><input name=writeapikey value=";
+		message += writeApiKey;
+		message += "><br>";
+		//message += "<br>TALKBACK ID<br><input name=talkbackid value=";
+		message += "<br>PORT<br><input name=talkbackid value=";
+		message += talkbackID;
+		message += "><br>";
+		//message += "<br>TALKBACK API KEY<br><input name=talkbackapikey value=";
+		message += "<br>STATION NAME<br><input name=talkbackapikey value=";
+		message += talkbackApiKey;
+		message += "><hr>";
 #endif
 
 #ifdef MQTT
-			message += "MQTT SERVER<br><input name=mqttserver value=";
-			message += mqttServer;
-			message += "><br>";
-			message += "<br>MQTT USER<br><input name=mqttuser value=";
-			message += mqttUser;
-			message += "><br>";
-			message += "<br>MQTT PASSWORD<br><input name=mqttpassword value=";
-			message += mqttPassword;
-			message += "><br>";
-			message += "<br>MQTT ID<br><input name=mqttid value=";
-			message += mqttID;
-			message += "><br>";
-			message += "<br>MQTT ROOT TOPIC (/)<br><input name=mqttroottopic value=";
-			message += mqttRootTopic;
-			message += "><hr>";
+		message += "MQTT SERVER<br><input name=mqttserver value=";
+		message += mqttServer;
+		message += "><br>";
+		message += "<br>MQTT USER<br><input name=mqttuser value=";
+		message += mqttUser;
+		message += "><br>";
+		message += "<br>MQTT PASSWORD<br><input name=mqttpassword value=";
+		message += mqttPassword;
+		message += "><br>";
+		message += "<br>MQTT ID<br><input name=mqttid value=";
+		message += mqttID;
+		message += "><br>";
+		message += "<br>MQTT ROOT TOPIC (/)<br><input name=mqttroottopic value=";
+		message += mqttRootTopic;
+		message += "><hr>";
 #endif
 
-			message += "MODE!<br><input name=newMode value=";
-			message += newMode;
-			message += "><h3>";
-			message += "ACTUAL MODE: ";
-			message += mode;
-			message += "</h3>";
+		message += "MODE!<br><input name=newMode value=";
+		message += newMode;
+		message += "><h3>";
+		message += "ACTUAL MODE: ";
+		message += mode;
+		message += "</h3>";
 
-			//#define MODE_2_OUT_IN	1
-			//#define MODE_2_US		2
-			//#define MODE_2_OUT_DHT22	3
-			//#define MODE_2_OUT_COUNT		4
-			message += "1: IN PIN3 (RX) / OUT PIN2<br>";
-			message += "2: ULTRASONIC ECHO PIN3 (RX) / TRIGG PIN2<br>";
-			message += "3: DHT BUS PIN3 (RX) / OUT PIN2<br>";
-			message += "4: COUNTER IN PIN3 (RX) / OUT PIN2<br>";
-			message += "5: ONEWIRE BUS PIN3 (RX) / OUT PIN2<br>";
-			message += "<hr>";
+		message += "1: IN PIN3 (RX) / OUT PIN2<br>";
+		message += "2: ULTRASONIC ECHO PIN3 (RX) / TRIGG PIN2<br>";
+		message += "3: DHT BUS PIN3 (RX) / OUT PIN2<br>";
+		message += "4: COUNTER IN PIN3 (RX) / OUT PIN2<br>";
+		message += "5: ONEWIRE BUS PIN3 (RX) / OUT PIN2<br>";
+		message += "<hr>";
 
-			//message += "<br>";
-			message += "<button type=submit name=cmd value=setapi>SET API!</button>";
-			message += "</form>";
-			message += htmlFooter;
-			httpServer.send(200, "text/html", message);
-		});
+		message += "<button type=submit name=cmd value=setapi>SET API!</button>";
+		message += "</form>";
+		message += htmlFooter;
+		httpServer.send(200, "text/html", message);
+	});
 
 	httpServer.on("/savesettings", []() {
 		Serial.println("/savesettings");
@@ -1767,13 +1693,6 @@ void setup() {
 			Serial.print("Time offset: ");
 			Serial.println(offset);
 
-			//unsigned long h=(unsigned long)httpServer.arg("hour").toInt();// + offset / 3600;
-			//unsigned long m=(unsigned long)httpServer.arg("minute").toInt();// + offset / 60;
-			//unsigned long s=(unsigned long)httpServer.arg("second").toInt();// + offset;
-			//unsigned long year=(unsigned long)httpServer.arg("year").toInt();
-			//unsigned long month=(unsigned long)httpServer.arg("month").toInt();
-			//unsigned long day=(unsigned long)httpServer.arg("day").toInt();
-
 			tmElements_t tm;
 			tm.Second = (unsigned long)httpServer.arg("second").toInt();
 			tm.Minute = (unsigned long)httpServer.arg("minute").toInt();
@@ -1784,15 +1703,15 @@ void setup() {
 			time_t t = makeTime(tm);// + offset;
 
 			/*
-			 Serial.println("Old time:");
-			 Serial.println(timeClient.getEpochTime());
-			 Serial.println(timeClient.getFormattedTime());
-			 Serial.println("Set time:");
-			 Serial.println(t);
-			 Serial.println("New time:");
-			 Serial.println(timeClient.getEpochTime());
-			 Serial.println(timeClient.getFormattedTime());
-			 */
+			Serial.println("Old time:");
+			Serial.println(timeClient.getEpochTime());
+			Serial.println(timeClient.getFormattedTime());
+			Serial.println("Set time:");
+			Serial.println(t);
+			Serial.println("New time:");
+			Serial.println(timeClient.getEpochTime());
+			Serial.println(timeClient.getFormattedTime());
+			*/
 
 			//timeClient.setEpochTime((h * 3600L + m * 60L + s) - timeClient.getEpochTime()) + offset);
 			timeClient.setEpochTime(t);
@@ -2081,21 +2000,6 @@ void loopComm(void *pvParameters) {
 				mqttConnect();
 			}
 			if (mqttClient.connected()) {
-				/*
-				snprintf(msg, 20, "%d", (int) level);
-				msg[19] = 0;
-				mqttClient.publish(
-						String(mqttRootTopicVal + LEVEL_VAL_TOPIC).c_str(), msg);
-				snprintf(msg, 20, "%d",
-						bitRead(devices[DEV_ALARM_MAX].flags, OUTPUT_BIT));
-				mqttClient.publish(
-						String(mqttRootTopicVal + LEVEL_MAX_TOPIC).c_str(), msg);
-				snprintf(msg, 20, "%d",
-						bitRead(devices[DEV_ALARM_MIN].flags, OUTPUT_BIT));
-				mqttClient.publish(
-						String(mqttRootTopicVal + LEVEL_MIN_TOPIC).c_str(), msg);
-				*/
-
 				for(int i = 0; i < DEVICES_NUM; i++) {
 					String mqttTopic = String('/' + String(i));
 					/*
@@ -2127,53 +2031,7 @@ void loopComm(void *pvParameters) {
 					Serial.print(": ");
 					Serial.println(msg);
 				}
-
-				/*
-				snprintf(msg, 20, "%d", bitRead(devices[0].flags, OUTPUT_BIT));
-				mqttClient.publish(String(mqttRootTopicState + A_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-				snprintf(msg, 20, "%f", devices[0].val);
-				mqttClient.publish(String(mqttRootTopicVal + A_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-
-				snprintf(msg, 20, "%d", bitRead(devices[1].flags, OUTPUT_BIT));
-				mqttClient.publish(String(mqttRootTopicState + B_TOPIC).c_str(),	msg);
-				//Serial.println(msg);
-				snprintf(msg, 20, "%f", devices[1].val);
-				mqttClient.publish(String(mqttRootTopicVal + B_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-
-				snprintf(msg, 20, "%d", bitRead(devices[2].flags, OUTPUT_BIT));
-				mqttClient.publish(String(mqttRootTopicState + C_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-				snprintf(msg, 20, "%f", devices[2].val);
-				mqttClient.publish(String(mqttRootTopicVal + C_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-
-				snprintf(msg, 20, "%d", bitRead(devices[3].flags, OUTPUT_BIT));
-				mqttClient.publish(String(mqttRootTopicState + D_TOPIC).c_str(),	msg);
-				//Serial.println(msg);
-				snprintf(msg, 20, "%f", devices[3].val);
-				mqttClient.publish(String(mqttRootTopicVal + D_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-
-				snprintf(msg, 20, "%d", bitRead(devices[4].flags, OUTPUT_BIT));
-				mqttClient.publish(String(mqttRootTopicState + E_TOPIC).c_str(),	msg);
-				//Serial.println(msg);
-				snprintf(msg, 20, "%f", devices[4].val);
-				mqttClient.publish(String(mqttRootTopicVal + E_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-
-				snprintf(msg, 20, "%d", bitRead(devices[5].flags, OUTPUT_BIT));
-				mqttClient.publish(String(mqttRootTopicState + F_TOPIC).c_str(),	msg);
-				//Serial.println(msg);
-				snprintf(msg, 20, "%f", devices[5].val);
-				mqttClient.publish(String(mqttRootTopicVal + F_TOPIC).c_str(), msg);
-				//Serial.println(msg);
-				*/
-
 				isErrorConn = false;
-
 				DRAWMESSAGE(display, "MQTT DONE");
 			}
 			else {
@@ -2455,7 +2313,7 @@ void loop() {
 
 	if (millis() - lastMillis >= 1000) {
 		/////////////////////////////////////
-		// second
+		// second loop
 		/////////////////////////////////////
 
 		connectWiFi();
@@ -2508,6 +2366,7 @@ void loop() {
 			}
 		}
 #endif
+
 #ifdef ONEWIREBUS_PIN;
 		if(mode == MODE_2_OUT_DHT22) {
 			oneWireSensors.requestTemperatures();
@@ -2575,7 +2434,6 @@ void loop() {
 			unsigned int onSec = devices[i].par[0] * 3600 + devices[i].par[1] * 60;
 			unsigned int offSec = devices[i].par[2] * 60 + devices[i].par[3];
 
-			//unsigned int onSec = timeClient.getHours() * 3600 + timeClient.getMinutes() * 60;
 			time_t t = CE.toLocal(timeClient.getEpochTime());
 			byte h = (t / 3600) % 24;
 			byte m = (t / 60) % 60;
@@ -2653,19 +2511,6 @@ void loop() {
 			//Serial.print(i);
 			//Serial.print(':');
 			//Serial.print(bitRead(devices[i].flags, OUTPUT_BIT));
-			//Serial.print(' ');
-			//Serial.print(digitalRead(INPUT1_PIN));
-			//Serial.print(' ');
-
-			/*
-			if(i < DEVICES_NUM - 2)
-				Serial.print(counter[i]);
-			if(i == DEVICES_NUM - 2)
-				Serial.print(temperature);
-			if(i == DEVICES_NUM - 1)
-				Serial.print(humidity);
-			*/
-
 			//Serial.println();
 
 			if(bitRead(devices[i].flags, UNACK_BIT)) {
