@@ -792,11 +792,11 @@ String getDeviceForm(int i, struct Device devices[]) {
 	if (i >= 4) {
 		s += "<hr>TIME ON [h]<br><input name=par0 value=";
 		s += d.par[0];
-		s += "><hr>TIME ON [m]<br><input name=par1 value=";
+		s += "><br><br>TIME ON [m]<br><input name=par1 value=";
 		s += d.par[1];
-		s += "><hr>TIME OFF [m]<br><input name=par2 value=";
+		s += "><br><br>TIME OFF [m]<br><input name=par2 value=";
 		s += d.par[2];
-		s += "><hr>TIME OFF [s]<br><input name=par3 value=";
+		s += "><br><br>TIME OFF [s]<br><input name=par3 value=";
 		s += d.par[3];
 		s += ">";
 	}
@@ -805,20 +805,20 @@ String getDeviceForm(int i, struct Device devices[]) {
 		if(mode == MODE_2_OUT_COUNT) {
 			s += "<hr>PULSES<br><input name=par0 value=";
 			s += d.par[0];
-			s += "><hr>TIME [s]<br><input name=par1 value=";
+			s += "><br><br>TIME [s]<br><input name=par1 value=";
 			s += d.par[1];
 			s += ">";
 		}
 		else {
 			s += "<hr>HIGH ALARM<br><input name=par0 value=";
 			s += d.par[0];
-			s += "><hr>LOW ALARM<br><input name=par1 value=";
+			s += "><br><br>LOW ALARM<br><input name=par1 value=";
 			s += d.par[1];
 			s += ">";
 		}
-		s += " <hr>par2<br><input name=par2 value=";
+		s += "<br><br>PAR2<br><input name=par2 value=";
 		s += d.par[2];
-		s += "><hr>par3<br><input name=par3 value=";
+		s += "><br><br>PAR3<br><input name=par3 value=";
 		s += d.par[3];
 		s += ">";
 	}
@@ -2375,6 +2375,11 @@ void loop() {
 				oneWireSensors.getAddress(tempDeviceAddress, i);
 				//oneWireSensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
 				devices[i].val = oneWireSensors.getTempC(tempDeviceAddress);
+
+				if(devices[i].val > devices[i].par[0] || devices[i].val < devices[i].par[1])
+					setAlarm(&devices[i]);
+				else
+					clearAlarm(&devices[i]);
 			}
 		}
 #endif
