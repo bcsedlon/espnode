@@ -529,6 +529,14 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 			strncpy(msg, (const char*)payload, length);
 			msg[length] = 0;
 			devices[i].par[p] = atoi(msg);
+
+			String mqttTopic = String('/' + String(i) + "/par" + String(p));
+			String mqttTopicVal = String(mqttRootTopicVal + mqttTopic);
+			snprintf(msg, 20, "%i", devices[i].par[p]);
+			mqttClient.publish(mqttTopicVal.c_str(), msg);
+			Serial.print(mqttTopicVal);
+			Serial.print(": ");
+			Serial.println(msg);
 		}
 		return;
 	}
@@ -2436,6 +2444,11 @@ void loop() {
 		*/
 
 		for(int i = 4;  i < 8; i++) {
+			if(bitRead(devices[i].flags, OUTPUT_BIT)) {
+				outOnSecCounter[i - 4]++;
+				devices[i].val++;
+			}
+
 			unsigned int onSec = devices[i].par[0] * 3600 + devices[i].par[1] * 60;
 			unsigned int offSec = devices[i].par[2] * 60 + devices[i].par[3];
 
@@ -2450,20 +2463,19 @@ void loop() {
 					Serial.println(String(i) + ": onTime");
 					bitClear(devices[i].flags, MANUAL_BIT);
 					bitSet(devices[i].flags, OUTPUT_BIT);
+					devices[i].val = 0;
+					outOnSecCounter[i - 4] = 0;
 				}
 			}
 
 			if(offSec) {
-				if(outOnSecCounter[i - 4] > offSec) {
+				if(outOnSecCounter[i - 4] >= offSec) {
+				//if(devices[i - 4].val > offSec) {
 					Serial.println(String(i) + ": offTime");
 					bitClear(devices[i].flags, MANUAL_BIT);
 					bitClear(devices[i].flags, OUTPUT_BIT);
 					outOnSecCounter[i - 4] = 0;
 				}
-			}
-
-			if(bitRead(devices[i].flags, OUTPUT_BIT)) {
-				outOnSecCounter[i - 4]++;
 			}
 		}
 /*
