@@ -2,14 +2,18 @@
 //This is a automatic generated file
 //Please do not modify this file
 //If you touch this file your change will be overwritten during the next build
-//This file has been generated on 2019-06-08 20:39:50
+//This file has been generated on 2019-06-09 09:06:01
 
 #include "Arduino.h"
 #include "Arduino.h"
+#define DEVICES_NUM 8
+#define DEVICE_PARAMS_NUM 4
+#define COMM_TIME 20
 #define MODE_2_OUT_IN		1
 #define MODE_2_US			2
 #define MODE_2_OUT_DHT22	3
 #define MODE_2_OUT_COUNT	4
+#define MODE_2_OUT_ONEWIRE	5
 extern int mode;
 extern int newMode;
 #define CONFIG_WIFI_PIN 0
@@ -38,7 +42,6 @@ extern ESP8266HTTPUpdateServer httpUpdater;
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
-#define DEVICES_NUM 8
 extern WiFiClient espClient;
 extern IPAddress deviceIP;
 extern bool isAP;
@@ -50,6 +53,10 @@ extern int reconnectTimeout;
 #define COUNTERBUFFER_SIZE 64
 extern unsigned long counter[];
 extern uint8_t countersIndex;
+#define ONEWIREBUS_PIN 2
+#include "libraries/DallasTemperature.h"
+extern OneWire oneWire;
+extern DallasTemperature oneWireSensors;
 #define DHT_PIN 2
 #define DHT11 11
 #define DHT22 22
