@@ -1,9 +1,16 @@
 #include "Arduino.h"
 
+#define DEVICES_NUM 8
+#define DEVICE_PARAMS_NUM 4
+#define COMM_TIME 20	//s
+
+// 0 - 4: INPUTS
+// 4 - 8: OUTPUTS
 #define MODE_2_OUT_IN		1
 #define MODE_2_US			2
 #define MODE_2_OUT_DHT22	3
 #define MODE_2_OUT_COUNT	4
+#define MODE_2_OUT_ONEWIRE	5
 int mode;
 int newMode;
 
@@ -73,8 +80,6 @@ WebServer httpServer(80);
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
 
-#define DEVICES_NUM 8 //2 //3
-
 WiFiClient espClient;
 IPAddress deviceIP;
 bool isAP;
@@ -112,9 +117,9 @@ uint8_t countersIndex;
  static const uint8_t D10  = 1;
  */
 
-//#define ONEWIREBUS_PIN 21 //D8 //13 //D7
+#define ONEWIREBUS_PIN 2 //D8 //13 //D7
 #ifdef ONEWIREBUS_PIN
-#include "libraries/OneWire.h"
+//#include "libraries/OneWire.h"
 #include "libraries/DallasTemperature.h"
 OneWire oneWire(ONEWIREBUS_PIN);
 DallasTemperature oneWireSensors(&oneWire);
@@ -241,10 +246,11 @@ float analogRead(int pin, int samples) {
 #endif
 
 struct Device {
-	int par1;
-	int par2;
-	int par3;
-	int par4;
+	//int par0;
+	//int par1;
+	//int par2;
+	//int par3;
+	int par[DEVICE_PARAMS_NUM];
 	int flags;
 	char name[16];
 	float val;
@@ -504,17 +510,20 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 		Serial.println(msg);
 
 		for(int i = 0; i < DEVICES_NUM; i++) {
-			for(int p = 0;  p < 4; p++) {
-				String mqttTopic = String('/' + String(i) + "/par" + String(p + 1));
+			for(int p = 0;  p < DEVICE_PARAMS_NUM; p++) {
+				String mqttTopic = String('/' + String(i) + "/par" + String(p));
 				String mqttTopicVal = String(mqttRootTopicVal + mqttTopic);
+				/*
 				if(p == 0)
-					snprintf(msg, 20, "%i", devices[i].par1);
+					snprintf(msg, 20, "%i", devices[i].par[0]);
 				if(p == 1)
-					snprintf(msg, 20, "%i", devices[i].par2);
+					snprintf(msg, 20, "%i", devices[i].par[1]);
 				if(p == 2)
-					snprintf(msg, 20, "%i", devices[i].par3);
+					snprintf(msg, 20, "%i", devices[i].par[2]);
 				if(p == 3)
-					snprintf(msg, 20, "%i", devices[i].par4);
+					snprintf(msg, 20, "%i", devices[i].par[3]);
+				*/
+				snprintf(msg, 20, "%i", devices[i].par[p]);
 				mqttClient.publish(mqttTopicVal.c_str(), msg);
 				Serial.print(mqttTopicVal);
 				Serial.print(": ");
@@ -525,22 +534,25 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 	}
 
 	if(strstr((topic + strlen(topic) - 5), "/par")) {
-		int p = topic[strlen(topic) - 1] - 48 - 1;
+		int p = topic[strlen(topic) - 1] - 48;
 		int i = topic[strlen(topic) - 6] - 48;
 		//Serial.println(i);
 		//Serial.println(p);
 
-		if(i > -1 && i < DEVICES_NUM) {
+		if(i > -1 && i < DEVICES_NUM && p > -1 && p < DEVICE_PARAMS_NUM) {
 			strncpy(msg, (const char*)payload, length);
 			msg[length] = 0;
+			/*
 			if(p == 0)
-				devices[i].par1 = atoi(msg);
+				devices[i].par[0] = atoi(msg);
 			if(p == 1)
-				devices[i].par2 = atoi(msg);
+				devices[i].par[1] = atoi(msg);
 			if(p == 2)
-				devices[i].par3 = atoi(msg);
+				devices[i].par[2] = atoi(msg);
 			if(p == 3)
-				devices[i].par4 = atoi(msg);
+				devices[i].par[3] = atoi(msg);
+			*/
+			devices[i].par[p] = atoi(msg);
 		}
 		return;
 	}
@@ -696,7 +708,7 @@ String getDeviceForm(int i, struct Device devices[]) {
 	s += i;
 	s += "><h2>ID ";
 	s += char(i + 48);
-	//s += String(d.par4);
+	//s += String(d.par3);
 	s += ": ";
 	s += String(d.name);
 
@@ -715,41 +727,63 @@ String getDeviceForm(int i, struct Device devices[]) {
 		s += String(devices[i].val);
 		s += "</h2>";
 	}
-
-	if(mode == MODE_2_OUT_COUNT) {
-		if (i == 0) {
+	else {
+		if(mode == MODE_2_OUT_COUNT) {
+			//if (i == 0) {
+			s += "ALARM: ";
+			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+			s += "<br>";
 			s += "COUNTER [-]: ";
 			s += String(devices[i].val);
 			s += "</h2>";
+			//}
+		}
+
+		if(mode == MODE_2_US) {
+			//if (i == 0) {
 			s += "ALARM: ";
 			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
-		}
-	}
-
-	if(mode == MODE_2_US) {
-		if (i == 0) {
+			s += "<br>";
 			s += "DISTANCE [mm]: ";
 			s += String(devices[i].val);
 			s += "</h2>";
+			//}
+		}
+
+		if(mode == MODE_2_OUT_ONEWIRE) {
 			s += "ALARM: ";
 			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
-		}
-	}
-
-	if(mode == MODE_2_OUT_DHT22) {
-		if (i == 0) {
+			s += "<br>";
 			s += "TEMPERATURE [C]: ";
 			s += String(devices[i].val);
 			s += "</h2>";
-			s += "ALARM: ";
-			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
 		}
-		if (i == 1) {
-			s += "HUMIDITY [%]: ";
-			s += String(devices[i].val);
-			s += "</h2>";
-			s += "ALARM: ";
-			s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+
+		if(mode == MODE_2_OUT_DHT22) {
+			if (i == 0) {
+				s += "ALARM: ";
+				s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+				s += "<br>";
+				s += "TEMPERATURE [C]: ";
+				s += String(devices[i].val);
+				s += "</h2>";
+			}
+			if (i == 1) {
+				s += "ALARM: ";
+				s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+				s += "<br>";
+				s += "HUMIDITY [%]: ";
+				s += String(devices[i].val);
+				s += "</h2>";
+			}
+			if(i > 1) {
+				s += "STA: ";
+				s += String(bitRead(devices[i].flags, OUTPUT_BIT));
+				s += "</br>";
+				s += "VAL: ";
+				s += String(devices[i].val);
+				s += "</h2>";
+			}
 		}
 	}
 	//	if (bitRead(devices[i].flags, OUTPUT_BIT))
@@ -770,71 +804,71 @@ String getDeviceForm(int i, struct Device devices[]) {
 
 	/*
 	if (i < DEVICES_NUM) {
-		s += "<hr>PAR1<br><input name=par1 value=";
+		s += "<hr>par0<br><input name=par0 value=";
+		s += d.par0;
+		s += "><hr>par1<br><input name=par1 value=";
 		s += d.par1;
-		s += "><hr>PAR2<br><input name=par2 value=";
+		s += "><hr>par2<br><input name=par2 value=";
 		s += d.par2;
-		s += "><hr>PAR3<br><input name=par3 value=";
+		s += "><hr>par3<br><input name=par3 value=";
 		s += d.par3;
-		s += "><hr>PAR4<br><input name=par4 value=";
-		s += d.par4;
 		s += ">";
 	}
 	*/
 	if (i >= 4) {
-		s += "<hr>TIME ON [h]<br><input name=par1 value=";
-		s += d.par1;
-		s += "><hr>TIME ON [m]<br><input name=par2 value=";
-		s += d.par2;
-		s += "><hr>TIME OFF [m]<br><input name=par3 value=";
-		s += d.par3;
-		s += "><hr>TIME OFF [s]<br><input name=par4 value=";
-		s += d.par4;
+		s += "<hr>TIME ON [h]<br><input name=par0 value=";
+		s += d.par[0];
+		s += "><hr>TIME ON [m]<br><input name=par1 value=";
+		s += d.par[1];
+		s += "><hr>TIME OFF [m]<br><input name=par2 value=";
+		s += d.par[2];
+		s += "><hr>TIME OFF [s]<br><input name=par3 value=";
+		s += d.par[3];
 		s += ">";
 	}
 
 	if (i < 4) {
 		if(mode == MODE_2_OUT_COUNT) {
-			s += "<hr>PULSES<br><input name=par1 value=";
-			s += d.par1;
-			s += "><hr>TIME [s]<br><input name=par2 value=";
-			s += d.par2;
+			s += "<hr>PULSES<br><input name=par0 value=";
+			s += d.par[0];
+			s += "><hr>TIME [s]<br><input name=par1 value=";
+			s += d.par[1];
 			s += ">";
 		}
 		else {
-			s += "<hr>HIGH ALARM<br><input name=par1 value=";
-			s += d.par1;
-			s += "><hr>LOW ALARM<br><input name=par2 value=";
-			s += d.par2;
+			s += "<hr>HIGH ALARM<br><input name=par0 value=";
+			s += d.par[0];
+			s += "><hr>LOW ALARM<br><input name=par1 value=";
+			s += d.par[1];
 			s += ">";
 		}
-		s += " <hr>PAR3<br><input name=par3 value=";
-		s += d.par3;
-		s += "><hr>PAR4<br><input name=par4 value=";
-		s += d.par4;
+		s += " <hr>par2<br><input name=par2 value=";
+		s += d.par[2];
+		s += "><hr>par3<br><input name=par3 value=";
+		s += d.par[3];
 		s += ">";
 	}
 	/*
 	if (i == DEVICES_NUM - 1) {
-		s += "<hr>HIGH ALARM [%]<br><input name=par1 value=";
+		s += "<hr>HIGH ALARM [%]<br><input name=par0 value=";
+		s += d.par0;
+		s += "><hr>LOW ALARM [%]<br><input name=par1 value=";
 		s += d.par1;
-		s += "><hr>LOW ALARM [%]<br><input name=par2 value=";
+		s += "><hr>PERIODIC TRANSFER [SEC]<br><input name=par2 value=";
 		s += d.par2;
-		s += "><hr>PERIODIC TRANSFER [SEC]<br><input name=par3 value=";
+		s += "><hr>ID<br><input name=par3 value=";
 		s += d.par3;
-		s += "><hr>ID<br><input name=par4 value=";
-		s += d.par4;
 		s += ">";
 	}
 	*/
 	/*
 	if (i == DEV_ALARM) {
-		s += "<hr>ALARM NO FLOW AFTER TIME [SECOND]<br><input name=par1 value=";
-		s += d.par1;
-		//s += "><hr><br>ALARM MAX LEVEL [mm]<br><input name=par3 value=";
+		s += "<hr>ALARM NO FLOW AFTER TIME [SECOND]<br><input name=par0 value=";
+		s += d.par0;
+		//s += "><hr><br>ALARM MAX LEVEL [mm]<br><input name=par2 value=";
+		//s += d.par2;
+		//s += "><hr><br>ALARM HYST [mm]<br><input name=par3 value=";
 		//s += d.par3;
-		//s += "><hr><br>ALARM HYST [mm]<br><input name=par4 value=";
-		//s += d.par4;
 		s += ">";
 	}
 	*/
@@ -1031,7 +1065,7 @@ void setup() {
 	display.display();
 #endif
 
-#ifdef ONEWIRE_PIN
+#ifdef ONEWIREBUS_PIN;
 	oneWireSensors.begin();
 #endif
 
@@ -1098,10 +1132,10 @@ void setup() {
 				devices[i].name[4] = i + 48;
 				devices[i].name[5] = 0;
 			}
-			devices[i].par1 = 0;
-			devices[i].par2 = 0;
-			devices[i].par3 = 0;
-			devices[i].par4 = i;
+			devices[i].par[0] = 0;
+			devices[i].par[1] = 0;
+			devices[i].par[2] = 0;
+			devices[i].par[3] = i;
 			bitClear(devices[i].flags, OUTPUT_BIT);
 		}
 
@@ -1150,19 +1184,25 @@ void setup() {
 #endif
 	}
 
-	if(mode == MODE_2_OUT_DHT22) {
+	if(mode == MODE_2_OUT_DHT22 || mode == MODE_2_OUT_ONEWIRE) {
 #ifdef DHT_PIN
-		//dht.begin();
-		//DHT dht(DHT_PIN, DHT22);
-		dht.begin();
-		//pDHT = &dht;
+		if(mode == MODE_2_OUT_DHT22) {
+			//dht.begin();
+			//DHT dht(DHT_PIN, DHT22);
+			dht.begin();
+			//pDHT = &dht;
+		}
+#endif
+#ifdef ONEWIREBUS_PIN;
+		if(mode == MODE_2_OUT_ONEWIRE) {
+			oneWireSensors.begin();
+		}
 #endif
 #ifdef OUTPUT0_PIN
 		digitalWrite(OUTPUT0_PIN, false);
 		pinMode(OUTPUT0_PIN, OUTPUT);
 #endif
 	}
-
 
 	if(mode == MODE_2_OUT_IN) {
 #ifdef INPUT0_PIN
@@ -1434,7 +1474,7 @@ void setup() {
 				message += i;
 				message += ">";
 				message += "ID ";
-				//message += devices[i].par4;
+				//message += devices[i].par[3];
 				message += char(i + 48);
 				message += ": ";
 				message += devices[i].name;
@@ -1698,6 +1738,7 @@ void setup() {
 			message += "2: ULTRASONIC ECHO PIN3 (RX) / TRIGG PIN2<br>";
 			message += "3: DHT BUS PIN3 (RX) / OUT PIN2<br>";
 			message += "4: COUNTER IN PIN3 (RX) / OUT PIN2<br>";
+			message += "5: ONEWIRE BUS PIN3 (RX) / OUT PIN2<br>";
 			message += "<hr>";
 
 			//message += "<br>";
@@ -1802,21 +1843,21 @@ void setup() {
 		Serial.println(cmd);
 		byte id=httpServer.arg("id").toInt();
 		if(cmd.equals("set")) {
+			int par0=httpServer.arg("par0").toInt();
+			Serial.println("par0");
 			int par1=httpServer.arg("par1").toInt();
 			Serial.println("par1");
 			int par2=httpServer.arg("par2").toInt();
 			Serial.println("par2");
 			int par3=httpServer.arg("par3").toInt();
 			Serial.println("par3");
-			int par4=httpServer.arg("par4").toInt();
-			Serial.println("par4");
 			String name=httpServer.arg("name");
 			Serial.println("name");
 			if(id >=0 && id < DEVICES_NUM) {
-				devices[id].par1 = par1;
-				devices[id].par2 = par2;
-				devices[id].par3 = par3;
-				devices[id].par4 = par4;
+				devices[id].par[0] = par0;
+				devices[id].par[1] = par1;
+				devices[id].par[2] = par2;
+				devices[id].par[3] = par3;
 				strncpy(devices[id].name, name.c_str(), 16);
 			}
 		}
@@ -1957,7 +1998,7 @@ String int2string(int i) {
 
 //TODO:
 int makeHttpGet(int i) {
-	String get = "http://" + String(serverName) + ":" + String(talkbackID) + "/" + writeApiKey + "?id=" + devices[i].par4 + "&field1=" + devices[i].name + "&field2=";
+	String get = "http://" + String(serverName) + ":" + String(talkbackID) + "/" + writeApiKey + "?id=" + devices[i].par[3] + "&field1=" + devices[i].name + "&field2=";
 
 	if(i < DEVICES_NUM)
 		get += String(bitRead(devices[i].flags, OUTPUT_BIT)) + "&field3=" + String(counter[i]);
@@ -2420,7 +2461,7 @@ void loop() {
 		connectWiFi();
 
 #ifdef ESP8266
-		if(secCounter % 20 == 0)
+		if(secCounter % COMM_TIME == 0)
 			loopComm(0);
 #endif
 
@@ -2442,7 +2483,7 @@ void loop() {
 			long d = pulseIn(INPUT0_PIN, HIGH);
 			devices[0].val = (d/2) * 34.3; //[mm]
 
-			if(devices[0].val > devices[0].par1 || devices[0].val < devices[0].par2)
+			if(devices[0].val > devices[0].par[0] || devices[0].val < devices[0].par[1])
 				setAlarm(&devices[0]);
 			else
 				clearAlarm(&devices[0]);
@@ -2460,10 +2501,21 @@ void loop() {
 			if(!isnan(t))
 				devices[1].val = h;
 			for(int i = 0; i < 2; i++) {
-				if(devices[i].val > devices[i].par1 || devices[i].val < devices[i].par2)
+				if(devices[i].val > devices[i].par[0] || devices[i].val < devices[i].par[1])
 					setAlarm(&devices[i]);
 				else
 					clearAlarm(&devices[i]);
+			}
+		}
+#endif
+#ifdef ONEWIREBUS_PIN;
+		if(mode == MODE_2_OUT_DHT22) {
+			oneWireSensors.requestTemperatures();
+			DeviceAddress tempDeviceAddress;
+			for(int i = 0;  i < 4 && i < oneWireSensors.getDeviceCount(); i++) {
+				oneWireSensors.getAddress(tempDeviceAddress, i);
+				//oneWireSensors.setResolution(tempDeviceAddress, TEMPERATURE_PRECISION);
+				devices[i].val = oneWireSensors.getTempC(tempDeviceAddress);
 			}
 		}
 #endif
@@ -2475,12 +2527,12 @@ void loop() {
 				counters[countersIndex][i] = counter[i];
 				countersIndex %= COUNTERBUFFER_SIZE;
 
-				uint8_t countersIndexCompare = countersIndex - devices[i].par2;
+				uint8_t countersIndexCompare = countersIndex - devices[i].par[1];
 				countersIndexCompare %= COUNTERBUFFER_SIZE;
 				//Serial.print(counters[countersIndex][i] - counters[countersIndexCompare][i]);
 				//Serial.println();
 
-				if(counters[countersIndex][i] - counters[countersIndexCompare][i] > devices[i].par1) {
+				if(counters[countersIndex][i] - counters[countersIndexCompare][i] > devices[i].par[0]) {
 					setAlarm(&devices[i]);
 				}
 				else {
@@ -2491,9 +2543,9 @@ void loop() {
 			countersIndex++;
 		}
 
-		//uint8_t countersIndexCompare = countersIndex - devices[0].par2;
+		//uint8_t countersIndexCompare = countersIndex - devices[0].par1;
 		//countersIndexCompare %= COUNTERBUFFER_SIZE;
-		//countersIndexCompare = countersIndex - devices[0].par2;
+		//countersIndexCompare = countersIndex - devices[0].par1;
 		//if(countersIndexCompare < 0)
 		//	countersIndexCompare += COUNTERBUFFER_SIZE;
 		//Serial.print(countersIndexCompare);
@@ -2520,8 +2572,8 @@ void loop() {
 		*/
 
 		for(int i = 4;  i < 8; i++) {
-			unsigned int onSec = devices[i].par1 * 3600 + devices[i].par2 * 60;
-			unsigned int offSec = devices[i].par3 * 60 + devices[i].par4;
+			unsigned int onSec = devices[i].par[0] * 3600 + devices[i].par[1] * 60;
+			unsigned int offSec = devices[i].par[2] * 60 + devices[i].par[3];
 
 			//unsigned int onSec = timeClient.getHours() * 3600 + timeClient.getMinutes() * 60;
 			time_t t = CE.toLocal(timeClient.getEpochTime());
@@ -2557,7 +2609,7 @@ void loop() {
 
 			if(mode == MODE_2_OUT_COUNT) {
 				if(i < COUNTERS_NUM) {
-					uint8_t countersIndexCompare = countersIndex - devices[i].par2;
+					uint8_t countersIndexCompare = countersIndex - devices[i].par[1];
 					countersIndexCompare %= COUNTERBUFFER_SIZE;
 */
 					/*
@@ -2583,7 +2635,7 @@ void loop() {
 					Serial.println();
 					*/
 /*
-					if(counters[countersIndex][i] - counters[countersIndexCompare][i] > devices[i].par1) {
+					if(counters[countersIndex][i] - counters[countersIndexCompare][i] > devices[i].par[0]) {
 						isAlarm= true;
 					}
 				}
@@ -2684,7 +2736,7 @@ void loop() {
 #ifdef RFTX_PIN
 		if ((secCounter & 0xF) == 0xF) {
   			//light protection
-  			if(secCounter > devices[7].par1 || secOverflow || bitRead(devices[0].flags, MANUAL_BIT)) {
+  			if(secCounter > devices[7].par0 || secOverflow || bitRead(devices[0].flags, MANUAL_BIT)) {
 				if(bitRead(devices[0].flags, OUTPUT_BIT))
 					//sendSignal(RFTX_PIN, rf1on);
 					rcSwitch.send(r1On, 24);
@@ -2707,7 +2759,7 @@ void loop() {
 //		digitalWrite(LED0_PIN, not (bitRead(devices[DEV_ALARM_MAX].flags, OUTPUT_BIT) | bitRead(devices[DEV_ALARM_MIN].flags, OUTPUT_BIT)));
 #endif
 
-		if(mode == MODE_2_OUT_IN || mode == MODE_2_OUT_DHT22 || mode == MODE_2_OUT_COUNT) {
+		if(mode == MODE_2_OUT_IN || mode == MODE_2_OUT_DHT22 || mode == MODE_2_OUT_COUNT || mode == MODE_2_OUT_ONEWIRE) {
 #ifdef OUTPUT0_PIN
 			digitalWrite(OUTPUT0_PIN, not(bitRead(devices[4].flags, OUTPUT_BIT)));
 #endif
