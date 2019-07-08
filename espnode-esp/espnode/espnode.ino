@@ -2,7 +2,7 @@
 
 #define DEVICES_NUM 8
 #define DEVICE_PARAMS_NUM 4
-#define COMM_TIME 20	//s
+#define COMM_TIME 300 //20	//s
 
 // 0 - 4: INPUTS
 // 4 - 8: OUTPUTS
@@ -71,6 +71,7 @@ WebServer httpServer(80);
 #ifndef ESP8266
 #define DRAWMESSAGE(display, message) (drawMessage(&display, message))
 #else
+#define display 0
 #define DRAWMESSAGE(display, message) (drawMessage(message))
 #endif
 
@@ -117,7 +118,7 @@ uint8_t countersIndex;
  static const uint8_t D10  = 1;
  */
 
-#define ONEWIREBUS_PIN 2 //D8 //13 //D7
+#define ONEWIREBUS_PIN 3 //D8 //13 //D7
 #ifdef ONEWIREBUS_PIN
 //#include "libraries/OneWire.h"
 #include "libraries/DallasTemperature.h"
@@ -134,7 +135,7 @@ DallasTemperature oneWireSensors(&oneWire);
 //#define INPUT6_PIN 33 //25
 //#define INPUT7_PIN 32 //26
 
-#define DHT_PIN 2	//13	//12 //D2 //9//6
+#define DHT_PIN 3	//13	//12 //D2 //9//6
 #ifdef DHT_PIN
 #define DHT11 11	// DHT 11
 #define DHT22 22	// DHT 22 (AM2302)
@@ -601,7 +602,7 @@ const char* update_path = "/firmware";
 char* htmlHeader =
 		"<html><head><title>ESPNODE</title><meta name=\"viewport\" content=\"width=device-width\"><style type=\"text/css\">body{font-family:monospace;} input{padding:5px;font-size:1em;font-family:monospace;} button{height:100px;width:100px;font-family:monospace;border-radius:5px;}</style></head><body><h1><a href=/>ESPNODE</a></h1>";
 char* htmlFooter =
-		"<hr><a href=./save>SAVE SETTINGS!</a><hr><a href=/settings>SYSTEM SETTINGS</a><hr>(c) GROWMAT EASY</body></html>";
+		"<hr><a href=/save>SAVE SETTINGS!</a><hr><a href=/settings>SYSTEM SETTINGS</a><hr>(c) GROWMAT EASY</body></html>";
 //const char HTTP_STYLE[] PROGMEM  = "<style>.c{text-align: center;} div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;font-family:verdana;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} .q{float: right;width: 64px;text-align: right;} .l{background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size: 1em;}</style>";
 //const char* serverIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='UPDATE'></form>";
 
@@ -1113,7 +1114,7 @@ void setup() {
 		mqttUser[0] = '/0';
 		mqttPassword[0] = '/0';
 		mqttID = 0;
-		strcpy(mqttRootTopic, "ESPNODE");
+		strcpy(mqttRootTopic, "ESPNODE/");
 #endif
 
 		saveApi();
@@ -1987,6 +1988,14 @@ void loopComm(void *pvParameters) {
 #else
 	if (1) {
 #endif
+
+		//TODO: output is true without this, why?
+		if(mode == MODE_2_OUT_IN || mode == MODE_2_OUT_DHT22 || mode == MODE_2_OUT_COUNT || mode == MODE_2_OUT_ONEWIRE) {
+#ifdef OUTPUT0_PIN
+			digitalWrite(OUTPUT0_PIN, bitRead(devices[4].flags, OUTPUT_BIT));
+#endif
+		}
+
 		//drawMessage(&display, String(millis()));
 #ifdef NTP
 		DRAWMESSAGE(display, "NTP CONN ...");
@@ -2257,7 +2266,6 @@ void loopComm(void *pvParameters) {
 // loop
 /////////////////////////////////////
 void loop() {
-
 	drd.loop();
 
 	//devices[DEVICES_NUM - 1].val = millis();
@@ -2623,7 +2631,7 @@ void loop() {
 
 		if(mode == MODE_2_OUT_IN || mode == MODE_2_OUT_DHT22 || mode == MODE_2_OUT_COUNT || mode == MODE_2_OUT_ONEWIRE) {
 #ifdef OUTPUT0_PIN
-			digitalWrite(OUTPUT0_PIN, not(bitRead(devices[4].flags, OUTPUT_BIT)));
+			digitalWrite(OUTPUT0_PIN, bitRead(devices[4].flags, OUTPUT_BIT));
 #endif
 #ifdef OUTPUT1_PIN
 			digitalWrite(OUTPUT1_PIN, not(bitRead(devices[5].flags, OUTPUT_BIT)));

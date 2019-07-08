@@ -104,6 +104,7 @@ bool NTPClient::update() {
 //bcsedlon
 void NTPClient::setEpochTime(unsigned long currentEpoc) {
 	this->_currentEpoc = currentEpoc;
+	this->_lastUpdate = millis();
 }
 
 unsigned long NTPClient::getEpochTime() {

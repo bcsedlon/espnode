@@ -2,13 +2,13 @@
 //This is a automatic generated file
 //Please do not modify this file
 //If you touch this file your change will be overwritten during the next build
-//This file has been generated on 2019-06-09 20:01:36
+//This file has been generated on 2019-07-07 20:00:17
 
 #include "Arduino.h"
 #include "Arduino.h"
 #define DEVICES_NUM 8
 #define DEVICE_PARAMS_NUM 4
-#define COMM_TIME 20
+#define COMM_TIME 300
 #define MODE_2_OUT_IN		1
 #define MODE_2_US			2
 #define MODE_2_OUT_DHT22	3
@@ -36,6 +36,7 @@ extern DoubleResetDetector drd;
 #include "libraries/WiFiManager.h"
 extern ESP8266WebServer httpServer;
 extern ESP8266HTTPUpdateServer httpUpdater;
+#define display 0
 #define DRAWMESSAGE(display, message) (drawMessage(message))
 #include <WiFiClient.h>
 #include <DNSServer.h>
@@ -53,11 +54,11 @@ extern int reconnectTimeout;
 #define COUNTERBUFFER_SIZE 64
 extern unsigned long counter[];
 extern uint8_t countersIndex;
-#define ONEWIREBUS_PIN 2
+#define ONEWIREBUS_PIN 3
 #include "libraries/DallasTemperature.h"
 extern OneWire oneWire;
 extern DallasTemperature oneWireSensors;
-#define DHT_PIN 2
+#define DHT_PIN 3
 #define DHT11 11
 #define DHT22 22
 #define DHT21 21
