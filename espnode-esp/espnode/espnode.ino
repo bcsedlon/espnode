@@ -582,11 +582,16 @@ void mqttConnect() {
 		if(mqttClient.connect(mqttClientId.c_str(), mqttUser, mqttPassword)) {;
 			mqttClient.subscribe(String(mqttRootTopic + String(mqttID) + "/cmd/#").c_str());
 			mqttState = mqttClient.state();
+
+			Serial.println(String(mqttRootTopic + String(mqttID) + "/cmd/#"));
+			Serial.print("Status code = ");
+			Serial.println(mqttState);
 			break;
+
 		}
 		else {
 			mqttState = mqttClient.state();
-			Serial.print("failed, status code =");
+			Serial.print("Failed, status code = ");
 			Serial.println(mqttState);
 			delay(1000);
 		}
@@ -984,7 +989,7 @@ void setup() {
 	Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY);
 
 	Serial.print("\n\n");
-	Serial.println("ESPNODE/");
+	Serial.println("ESPNODE");
 
 #ifndef ESP8266
 	//analogReadResolution(9);
@@ -2267,6 +2272,7 @@ void loopComm(void *pvParameters) {
 /////////////////////////////////////
 void loop() {
 	drd.loop();
+	//mqttClient.loop();
 
 	//devices[DEVICES_NUM - 1].val = millis();
 
